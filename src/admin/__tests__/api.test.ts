@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import type { APIGatewayProxyEventV2 } from 'aws-lambda';
+import type { APIGatewayProxyEventV2, APIGatewayProxyStructuredResultV2 } from 'aws-lambda';
 
 vi.mock('../middleware/auth.js', () => ({
   extractAuthContext: vi.fn(),
@@ -71,59 +71,59 @@ beforeEach(() => {
 
 describe('Admin API handler', () => {
   it('handles OPTIONS for CORS', async () => {
-    const result = await handler(makeEvent('OPTIONS', '/api/tenant'));
+    const result = await handler(makeEvent('OPTIONS', '/api/tenant')) as APIGatewayProxyStructuredResultV2;
     expect(result.statusCode).toBe(200);
-    expect((result as any).headers['Access-Control-Allow-Origin']).toBe('*');
+    expect(result.headers?.['Access-Control-Allow-Origin']).toBe('*');
   });
 
   it('routes GET /api/tenant', async () => {
-    const result = await handler(makeEvent('GET', '/api/tenant'));
+    const result = await handler(makeEvent('GET', '/api/tenant')) as APIGatewayProxyStructuredResultV2;
     expect(result.statusCode).toBe(200);
   });
 
   it('routes PUT /api/tenant', async () => {
-    const result = await handler(makeEvent('PUT', '/api/tenant', '{}'));
+    const result = await handler(makeEvent('PUT', '/api/tenant', '{}')) as APIGatewayProxyStructuredResultV2;
     expect(result.statusCode).toBe(200);
   });
 
   it('routes GET /api/rooms', async () => {
-    const result = await handler(makeEvent('GET', '/api/rooms'));
+    const result = await handler(makeEvent('GET', '/api/rooms')) as APIGatewayProxyStructuredResultV2;
     expect(result.statusCode).toBe(200);
   });
 
   it('routes POST /api/rooms', async () => {
-    const result = await handler(makeEvent('POST', '/api/rooms', '{}'));
+    const result = await handler(makeEvent('POST', '/api/rooms', '{}')) as APIGatewayProxyStructuredResultV2;
     expect(result.statusCode).toBe(201);
   });
 
   it('routes GET /api/rooms/:id', async () => {
-    const result = await handler(makeEvent('GET', '/api/rooms/r1'));
+    const result = await handler(makeEvent('GET', '/api/rooms/r1')) as APIGatewayProxyStructuredResultV2;
     expect(result.statusCode).toBe(200);
   });
 
   it('routes GET /api/rooms/:id/subscribers', async () => {
-    const result = await handler(makeEvent('GET', '/api/rooms/r1/subscribers'));
+    const result = await handler(makeEvent('GET', '/api/rooms/r1/subscribers')) as APIGatewayProxyStructuredResultV2;
     expect(result.statusCode).toBe(200);
   });
 
   it('returns 401 for unauthorized requests', async () => {
     mockedAuth.mockResolvedValue(null);
-    const result = await handler(makeEvent('GET', '/api/tenant'));
+    const result = await handler(makeEvent('GET', '/api/tenant')) as APIGatewayProxyStructuredResultV2;
     expect(result.statusCode).toBe(401);
   });
 
   it('routes POST /api/admin/invite', async () => {
-    const result = await handler(makeEvent('POST', '/api/admin/invite', '{"email":"a@b.com"}'));
+    const result = await handler(makeEvent('POST', '/api/admin/invite', '{"email":"a@b.com"}')) as APIGatewayProxyStructuredResultV2;
     expect(result.statusCode).toBe(201);
   });
 
   it('routes GET /api/admin/users', async () => {
-    const result = await handler(makeEvent('GET', '/api/admin/users'));
+    const result = await handler(makeEvent('GET', '/api/admin/users')) as APIGatewayProxyStructuredResultV2;
     expect(result.statusCode).toBe(200);
   });
 
   it('returns 404 for unknown routes', async () => {
-    const result = await handler(makeEvent('GET', '/api/unknown'));
+    const result = await handler(makeEvent('GET', '/api/unknown')) as APIGatewayProxyStructuredResultV2;
     expect(result.statusCode).toBe(404);
   });
 });
