@@ -1,0 +1,33 @@
+image: node:20
+
+stages:
+  - test
+
+test-backend:
+  stage: test
+  script:
+    - npm ci
+    - npm test
+  cache:
+    key: dale-node-${CI_COMMIT_REF_SLUG}
+    paths:
+      - node_modules/
+
+test-web:
+  stage: test
+  script:
+    - cd web && npm ci && npx tsc --noEmit
+  cache:
+    key: dale-web-${CI_COMMIT_REF_SLUG}
+    paths:
+      - web/node_modules/
+
+synth:
+  stage: test
+  script:
+    - npm ci
+    - npx cdk synth -c env=dev
+  cache:
+    key: dale-node-${CI_COMMIT_REF_SLUG}
+    paths:
+      - node_modules/
