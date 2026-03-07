@@ -1,0 +1,94 @@
+version: '3.8'
+
+services:
+  dynamodb-local:
+    image: amazon/dynamodb-local:latest
+    container_name: dale-dynamodb
+    ports:
+      - "8000:8000"
+    command: "-jar DynamoDBLocal.jar -sharedDb -dbPath /data"
+    volumes:
+      - dynamodb-data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -s http://localhost:8000 || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  localstack:
+    image: localstack/localstack:3.0
+    container_name: dale-localstack
+    ports:
+      - "4566:4566"
+    environment:
+      - SERVICES=ssm
+      - DEBUG=0
+      - PERSISTENCE=1
+    volumes:
+      - localstack-data:/var/lib/localstack
+      - /var/run/docker.sock:/var/run/docker.sock
+    healthcheck:
+      test: ["CMD-SHELL", "awslocal ssm describe-parameters || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  dale-api:
+    build:
+      context: .
+      dockerfile: local/Dockerfile
+    container_name: dale-api
+    ports:
+      - "3000:3000"
+      - "3001:3001"
+      - "3002:3002"
+      - "3003:3003"
+      - "3004:3004"
+    environment:
+      - TABLE_NAME=dale-local
+      - AWS_REGION=us-east-1
+      - AWS_ACCESS_KEY_ID=local
+      - AWS_SECRET_ACCESS_KEY=local
+      - DYNAMODB_ENDPOINT=http://dynamodb-local:8000
+      - SSM_ENDPOINT=http://localstack:4566
+      - TELEGRAM_WEBHOOK_URL=http://localhost:3001
+      - STRIPE_WEBHOOK_URL=http://localhost:3002
+      - PAYPAL_WEBHOOK_URL=http://localhost:3003
+      - PAYPAL_BASE_URL=https://api-m.sandbox.paypal.com
+      - TELEGRAM_TEST_MODE=true
+      - TELEGRAM_API_BASE_URL=http://localhost:3004
+      - JWT_SECRET=local-test-secret-key-for-development
+      - COGNITO_USER_POOL_ID=local-pool
+    depends_on:
+      dynamodb-local:
+        condition: service_healthy
+      localstack:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -s http://localhost:3000/health || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  setup:
+    build:
+      context: .
+      dockerfile: local/Dockerfile
+    container_name: dale-setup
+    command: ["npx", "tsx", "local/setup.ts"]
+    environment:
+      - TABLE_NAME=dale-local
+      - AWS_REGION=us-east-1
+      - AWS_ACCESS_KEY_ID=local
+      - AWS_SECRET_ACCESS_KEY=local
+      - DYNAMODB_ENDPOINT=http://dynamodb-local:8000
+      - SSM_ENDPOINT=http://localstack:4566
+    depends_on:
+      dynamodb-local:
+        condition: service_healthy
+      localstack:
+        condition: service_healthy
+
+volumes:
+  dynamodb-data:
+  localstack-data:
