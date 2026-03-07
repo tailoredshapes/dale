@@ -47,6 +47,7 @@ e2e-local:
   before_script: []
   script:
     # Start services
+    - docker ps -aq --filter name=dale | xargs -r docker rm -f 2>/dev/null || true
     - docker compose down -v 2>/dev/null || true
     - docker compose up -d --build
 
