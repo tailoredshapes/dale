@@ -47,13 +47,13 @@ e2e-local:
   before_script: []
   script:
     # Start services
-    - docker-compose up -d --build
+    - docker compose up -d --build
 
     # Wait for setup to complete
     - |
       echo "Waiting for setup to complete..."
       for i in $(seq 1 30); do
-        if docker-compose ps setup | grep -q "Exit 0"; then
+        if docker compose ps setup | grep -q "Exit 0"; then
           echo "Setup completed successfully"
           break
         fi
@@ -86,8 +86,8 @@ e2e-local:
         node:20-alpine \
         sh -c "npm ci && npx cucumber-js --tags 'not @real-telegram and not @cognito-srp and not @tutorial'"
   after_script:
-    - docker-compose logs || true
-    - docker-compose down -v || true
+    - docker compose logs || true
+    - docker compose down -v || true
 
 deploy-prod:
   stage: deploy
