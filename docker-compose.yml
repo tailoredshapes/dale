@@ -39,7 +39,7 @@ services:
       dockerfile: local/Dockerfile
     container_name: dale-api
     ports:
-      - "3000:3000"
+      - "13000:3000"
       - "3001:3001"
       - "3002:3002"
       - "3003:3003"

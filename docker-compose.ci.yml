@@ -1,8 +1,0 @@
-# CI override: strip host port bindings (Grafana owns 3000 on this host)
-services:
-  dale-api:
-    ports: []
-  dale-dynamodb:
-    ports: []
-  dale-localstack:
-    ports: []
