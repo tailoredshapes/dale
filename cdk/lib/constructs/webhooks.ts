@@ -1,7 +1,7 @@
 import * as cdk from 'aws-cdk-lib';
 import * as lambda from 'aws-cdk-lib/aws-lambda-nodejs';
 import * as iam from 'aws-cdk-lib/aws-iam';
-import { Runtime, FunctionUrlAuthType } from 'aws-cdk-lib/aws-lambda';
+import { Runtime, FunctionUrlAuthType, Architecture } from 'aws-cdk-lib/aws-lambda';
 import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
 import { Construct } from 'constructs';
 import * as path from 'path';
@@ -37,6 +37,7 @@ export class Webhooks extends Construct {
 
     const telegramHandler = new lambda.NodejsFunction(this, 'TelegramHandler', {
       runtime: Runtime.NODEJS_20_X,
+      architecture: Architecture.ARM_64,
       entry: path.join(__dirname, '../../../src/telegram/webhook.ts'),
       handler: 'handler',
       environment: commonEnv,
@@ -49,6 +50,7 @@ export class Webhooks extends Construct {
 
     const stripeHandler = new lambda.NodejsFunction(this, 'StripeHandler', {
       runtime: Runtime.NODEJS_20_X,
+      architecture: Architecture.ARM_64,
       entry: path.join(__dirname, '../../../src/stripe/webhook.ts'),
       handler: 'handler',
       environment: commonEnv,
@@ -62,6 +64,7 @@ export class Webhooks extends Construct {
 
     const paypalHandler = new lambda.NodejsFunction(this, 'PayPalHandler', {
       runtime: Runtime.NODEJS_20_X,
+      architecture: Architecture.ARM_64,
       entry: path.join(__dirname, '../../../src/paypal/webhook.ts'),
       handler: 'handler',
       environment: {

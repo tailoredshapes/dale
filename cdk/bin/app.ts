@@ -21,4 +21,5 @@ new DaleStack(app, stackName, {
   envName,
   retainData: envConfig.retainData,
   telegramTestMode: envConfig.telegramTestMode,
+  blueGreenDeployment: envConfig.blueGreenDeployment,
 });

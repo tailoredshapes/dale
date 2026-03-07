@@ -2,6 +2,7 @@ import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import { Database } from './constructs/database.js';
 import { Webhooks } from './constructs/webhooks.js';
+import { BlueGreenWebhooks } from './constructs/blue-green-webhooks.js';
 import { AdminApi } from './constructs/admin-api.js';
 import { WebHosting } from './constructs/web-hosting.js';
 import { AutoShutdown } from './constructs/auto-shutdown.js';
@@ -11,6 +12,7 @@ export interface DaleStackProps extends cdk.StackProps {
   retainData: boolean;
   telegramTestMode?: boolean;
   paypalBaseUrl?: string;
+  blueGreenDeployment?: boolean;
 }
 
 export class DaleStack extends cdk.Stack {
@@ -26,13 +28,34 @@ export class DaleStack extends cdk.Stack {
       retainData: props.retainData,
     });
 
-    // Webhook Lambdas
-    const webhooks = new Webhooks(this, 'Webhooks', {
-      table: database.table,
-      ssmParamArns,
-      telegramTestMode: props.telegramTestMode,
-      paypalBaseUrl: props.paypalBaseUrl,
-    });
+    // Webhook URLs (set differently based on deployment type)
+    let telegramWebhookUrl: string;
+    let stripeWebhookUrl: string;
+    let paypalWebhookUrl: string;
+
+    // Webhook Lambdas - use blue/green for prod, function URLs for dev
+    if (props.blueGreenDeployment) {
+      const blueGreenWebhooks = new BlueGreenWebhooks(this, 'BlueGreenWebhooks', {
+        table: database.table,
+        ssmParamArns,
+        telegramTestMode: props.telegramTestMode,
+        paypalBaseUrl: props.paypalBaseUrl,
+        envName: props.envName,
+      });
+      telegramWebhookUrl = blueGreenWebhooks.telegramUrl;
+      stripeWebhookUrl = blueGreenWebhooks.stripeUrl;
+      paypalWebhookUrl = blueGreenWebhooks.paypalUrl;
+    } else {
+      const webhooks = new Webhooks(this, 'Webhooks', {
+        table: database.table,
+        ssmParamArns,
+        telegramTestMode: props.telegramTestMode,
+        paypalBaseUrl: props.paypalBaseUrl,
+      });
+      telegramWebhookUrl = webhooks.telegramUrl.url;
+      stripeWebhookUrl = webhooks.stripeUrl.url;
+      paypalWebhookUrl = webhooks.paypalUrl.url;
+    }
 
     // Web Hosting (S3 + CloudFront) — before AdminApi so CloudFront domain is available
     // Set DOMAIN_NAME + CERTIFICATE_ARN env vars to enable a custom domain (e.g. dalegram.com).
@@ -51,9 +74,9 @@ export class DaleStack extends cdk.Stack {
       table: database.table,
       ssmParamArns,
       telegramTestMode: props.telegramTestMode,
-      telegramWebhookUrl: webhooks.telegramUrl.url,
-      stripeWebhookUrl: webhooks.stripeUrl.url,
-      paypalWebhookUrl: webhooks.paypalUrl.url,
+      telegramWebhookUrl,
+      stripeWebhookUrl,
+      paypalWebhookUrl,
       paypalBaseUrl: props.paypalBaseUrl,
       envName: props.envName,
       googleClientId: process.env.GOOGLE_CLIENT_ID,
@@ -77,15 +100,15 @@ export class DaleStack extends cdk.Stack {
 
     // Outputs
     new cdk.CfnOutput(this, 'TelegramWebhookUrl', {
-      value: webhooks.telegramUrl.url,
+      value: telegramWebhookUrl,
     });
 
     new cdk.CfnOutput(this, 'StripeWebhookUrl', {
-      value: webhooks.stripeUrl.url,
+      value: stripeWebhookUrl,
     });
 
     new cdk.CfnOutput(this, 'PayPalWebhookUrl', {
-      value: webhooks.paypalUrl.url,
+      value: paypalWebhookUrl,
     });
 
     new cdk.CfnOutput(this, 'AdminApiUrl', {

@@ -3,7 +3,7 @@ import * as cognito from 'aws-cdk-lib/aws-cognito';
 import * as apigwv2 from 'aws-cdk-lib/aws-apigatewayv2';
 import * as lambda from 'aws-cdk-lib/aws-lambda-nodejs';
 import * as iam from 'aws-cdk-lib/aws-iam';
-import { Runtime } from 'aws-cdk-lib/aws-lambda';
+import { Runtime, Architecture } from 'aws-cdk-lib/aws-lambda';
 import { HttpLambdaIntegration } from 'aws-cdk-lib/aws-apigatewayv2-integrations';
 import { HttpJwtAuthorizer } from 'aws-cdk-lib/aws-apigatewayv2-authorizers';
 import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
@@ -114,6 +114,7 @@ export class AdminApi extends Construct {
     // Admin Lambda
     const adminHandler = new lambda.NodejsFunction(this, 'AdminHandler', {
       runtime: Runtime.NODEJS_20_X,
+      architecture: Architecture.ARM_64,
       entry: path.join(__dirname, '../../../src/admin/api.ts'),
       handler: 'handler',
       environment: {

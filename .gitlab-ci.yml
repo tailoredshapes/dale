@@ -2,6 +2,11 @@ image: node:20
 
 stages:
   - test
+  - e2e
+  - deploy
+
+before_script:
+  - git config --global url."http://oauth2:${GITLAB_TOKEN}@git.tildarc.com/tailoredshapes".insteadOf "https://git.tildarc.com/tailoredshapes"
 
 test-backend:
   stage: test
@@ -31,3 +36,79 @@ synth:
     key: dale-node-${CI_COMMIT_REF_SLUG}
     paths:
       - node_modules/
+
+e2e-local:
+  stage: e2e
+  needs:
+    - test-backend
+    - test-web
+  image: docker:24
+  services:
+    - docker:24-dind
+  variables:
+    DOCKER_HOST: tcp://docker:2376
+    DOCKER_TLS_CERTDIR: "/certs"
+    DOCKER_TLS_VERIFY: 1
+    DOCKER_CERT_PATH: "$DOCKER_TLS_CERTDIR/client"
+  before_script:
+    - apk add --no-cache docker-compose curl
+  script:
+    # Start services
+    - docker-compose up -d --build
+
+    # Wait for setup to complete
+    - |
+      echo "Waiting for setup to complete..."
+      for i in $(seq 1 30); do
+        if docker-compose ps setup | grep -q "Exit 0"; then
+          echo "Setup completed successfully"
+          break
+        fi
+        echo "Attempt $i/30 - waiting for setup..."
+        sleep 2
+      done
+
+    # Wait for API to be healthy
+    - |
+      echo "Waiting for dale-api to be healthy..."
+      for i in $(seq 1 60); do
+        if docker exec dale-api curl -sf http://localhost:3000/health > /dev/null 2>&1; then
+          echo "dale-api is healthy"
+          break
+        fi
+        echo "Attempt $i/60 - waiting..."
+        sleep 2
+      done
+
+    # Run E2E tests inside a container on the same network
+    - |
+      docker run --rm \
+        --network dale_default \
+        -v $(pwd)/e2e:/app/e2e \
+        -w /app/e2e \
+        -e E2E_LOCAL_MODE=true \
+        -e E2E_LOCAL_HOST=dale-api \
+        -e DYNAMODB_ENDPOINT=http://dale-dynamodb:8000 \
+        -e SSM_ENDPOINT=http://dale-localstack:4566 \
+        node:20-alpine \
+        sh -c "npm ci && npx cucumber-js --tags 'not @real-telegram and not @cognito-srp and not @tutorial'"
+  after_script:
+    - docker-compose logs || true
+    - docker-compose down -v || true
+
+deploy-prod:
+  stage: deploy
+  tags:
+    - shell
+  only:
+    - main
+  needs:
+    - e2e-local
+  variables:
+    AWS_ACCESS_KEY_ID: $AWS_ACCESS_KEY_ID
+    AWS_SECRET_ACCESS_KEY: $AWS_SECRET_ACCESS_KEY
+    AWS_DEFAULT_REGION: $AWS_DEFAULT_REGION
+  script:
+    - npm ci
+    - cd cdk && npm ci
+    - cd .. && npx cdk deploy Dale-Prod -c env=prod --require-approval never
