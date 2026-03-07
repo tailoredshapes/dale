@@ -1,10 +1,38 @@
 import { DynamoDBClient, QueryCommand, BatchWriteItemCommand } from '@aws-sdk/client-dynamodb';
 import { SSMClient, GetParametersByPathCommand, DeleteParameterCommand } from '@aws-sdk/client-ssm';
+import type { E2EConfig } from '../env.js';
 
-const dynamoClient = new DynamoDBClient({});
-const ssmClient = new SSMClient({});
+function getDynamoClient(config: E2EConfig): DynamoDBClient {
+  if (config.localMode && config.dynamoDbEndpoint) {
+    return new DynamoDBClient({
+      endpoint: config.dynamoDbEndpoint,
+      region: config.region,
+      credentials: {
+        accessKeyId: 'local',
+        secretAccessKey: 'local',
+      },
+    });
+  }
+  return new DynamoDBClient({});
+}
 
-export async function cleanupDynamoDBTenant(tableName: string, tenantId: string): Promise<void> {
+function getSSMClient(config: E2EConfig): SSMClient {
+  if (config.localMode && config.ssmEndpoint) {
+    return new SSMClient({
+      endpoint: config.ssmEndpoint,
+      region: config.region,
+      credentials: {
+        accessKeyId: 'local',
+        secretAccessKey: 'local',
+      },
+    });
+  }
+  return new SSMClient({});
+}
+
+export async function cleanupDynamoDBTenant(config: E2EConfig, tenantId: string): Promise<void> {
+  const dynamoClient = getDynamoClient(config);
+  const tableName = config.tableName;
   const prefix = `TENANT#${tenantId}`;
 
   // Query all items with pk starting with TENANT#{tenantId}
@@ -43,7 +71,9 @@ export async function cleanupDynamoDBTenant(tableName: string, tenantId: string)
   } while (lastKey);
 }
 
-export async function cleanupWebhookSecret(tableName: string, webhookSecret: string): Promise<void> {
+export async function cleanupWebhookSecret(config: E2EConfig, webhookSecret: string): Promise<void> {
+  const dynamoClient = getDynamoClient(config);
+  const tableName = config.tableName;
   const pk = `WHSECRET#${webhookSecret}`;
   try {
     await dynamoClient.send(
@@ -67,7 +97,8 @@ export async function cleanupWebhookSecret(tableName: string, webhookSecret: str
   }
 }
 
-export async function cleanupSSMParams(tenantId: string): Promise<void> {
+export async function cleanupSSMParams(config: E2EConfig, tenantId: string): Promise<void> {
+  const ssmClient = getSSMClient(config);
   const path = `/dale/tenants/${tenantId}/`;
 
   try {

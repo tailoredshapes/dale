@@ -1,6 +1,8 @@
 function telegramUrl(botToken: string, method: string): string {
+  // Allow overriding base URL for local development/testing
+  const baseUrl = process.env.TELEGRAM_API_BASE_URL ?? 'https://api.telegram.org';
   const testPrefix = process.env.TELEGRAM_TEST_MODE === 'true' ? '/test' : '';
-  return `https://api.telegram.org/bot${botToken}${testPrefix}/${method}`;
+  return `${baseUrl}/bot${botToken}${testPrefix}/${method}`;
 }
 
 export async function sendMessage(botToken: string, chatId: number, text: string): Promise<void> {

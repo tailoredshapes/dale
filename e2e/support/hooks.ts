@@ -2,18 +2,27 @@ import { Before, After } from '@cucumber/cucumber';
 import { chromium } from 'playwright';
 import { DaleWorld } from './world.js';
 import { createTestUser, deleteTestUser } from './auth.js';
+import { createLocalTestUser, deleteLocalTestUser } from './local-auth.js';
 import { cleanupDynamoDBTenant, cleanupSSMParams, cleanupWebhookSecret } from './cleanup.js';
 import { createTelegramClient, deleteGroup } from './gramjs.js';
 
 Before<DaleWorld>({ tags: '@auth' }, async function () {
-  const user = await createTestUser(
-    this.config.userPoolId,
-    this.config.userPoolClientId,
-  );
-  this.idToken = user.idToken;
-  this.accessToken = user.accessToken;
-  this.refreshToken = user.refreshToken;
-  this.cognitoUsername = user.username;
+  if (this.config.localMode) {
+    const user = await createLocalTestUser(this.config.adminApiUrl);
+    this.idToken = user.idToken;
+    this.accessToken = user.accessToken;
+    this.refreshToken = user.refreshToken;
+    this.cognitoUsername = user.username;
+  } else {
+    const user = await createTestUser(
+      this.config.userPoolId,
+      this.config.userPoolClientId,
+    );
+    this.idToken = user.idToken;
+    this.accessToken = user.accessToken;
+    this.refreshToken = user.refreshToken;
+    this.cognitoUsername = user.username;
+  }
 });
 
 Before<DaleWorld>({ tags: '@real-telegram' }, async function () {
@@ -61,17 +70,21 @@ After<DaleWorld>({ tags: '@tutorial' }, async function () {
 After<DaleWorld>(async function () {
   // Clean up tenants from DynamoDB and SSM
   for (const tenantId of this.tenantIds) {
-    await cleanupDynamoDBTenant(this.config.tableName, tenantId);
-    await cleanupSSMParams(tenantId);
+    await cleanupDynamoDBTenant(this.config, tenantId);
+    await cleanupSSMParams(this.config, tenantId);
   }
 
   // Clean up webhook secrets
   for (const secret of this.webhookSecrets) {
-    await cleanupWebhookSecret(this.config.tableName, secret);
+    await cleanupWebhookSecret(this.config, secret);
   }
 
   // Clean up Cognito user
   if (this.cognitoUsername) {
-    await deleteTestUser(this.config.userPoolId, this.cognitoUsername);
+    if (this.config.localMode) {
+      await deleteLocalTestUser(this.config.adminApiUrl, this.cognitoUsername);
+    } else {
+      await deleteTestUser(this.config.userPoolId, this.cognitoUsername);
+    }
   }
 });
