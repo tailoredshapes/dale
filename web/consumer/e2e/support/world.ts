@@ -1,0 +1,33 @@
+import { World, setWorldConstructor } from '@cucumber/cucumber';
+import { Browser, BrowserContext, Page } from 'playwright';
+
+export interface ConsumerConfig {
+  baseUrl: string;
+  apiUrl: string;
+  cognitoDomain?: string;
+  cognitoClientId?: string;
+}
+
+export class ConsumerWorld extends World {
+  public browser?: Browser;
+  public context?: BrowserContext;
+  public page?: Page;
+
+  public config: ConsumerConfig = {
+    baseUrl: process.env.E2E_CONSUMER_URL || 'http://localhost:5173',
+    apiUrl: process.env.E2E_API_URL || 'http://localhost:3000',
+    cognitoDomain: process.env.E2E_COGNITO_DOMAIN,
+    cognitoClientId: process.env.E2E_COGNITO_CLIENT_ID,
+  };
+
+  public idToken?: string;
+  public accessToken?: string;
+  public subscriptionId?: string;
+  public roomId?: string;
+
+  constructor(options: ConstructorParameters<typeof World>[0]) {
+    super(options);
+  }
+}
+
+setWorldConstructor(ConsumerWorld);
