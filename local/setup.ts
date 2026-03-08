@@ -4,6 +4,10 @@
  */
 import { DynamoDBClient, CreateTableCommand, DescribeTableCommand } from '@aws-sdk/client-dynamodb';
 import { SSMClient, PutParameterCommand } from '@aws-sdk/client-ssm';
+import https from 'node:https';
+
+// LocalStack 3.0 uses self-signed TLS — skip cert verification for local dev
+const localAgent = new https.Agent({ rejectUnauthorized: false });
 
 const dynamoEndpoint = process.env.DYNAMODB_ENDPOINT || 'http://localhost:8000';
 const ssmEndpoint = process.env.SSM_ENDPOINT || 'http://localhost:4566';
@@ -25,6 +29,7 @@ const ssm = new SSMClient({
     accessKeyId: 'local',
     secretAccessKey: 'local',
   },
+  requestHandler: { httpsAgent: localAgent } as any,
 });
 
 async function tableExists(): Promise<boolean> {

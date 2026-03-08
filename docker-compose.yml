@@ -18,7 +18,7 @@ services:
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
     healthcheck:
-      test: ["CMD-SHELL", "curl -sf http://localhost:4566/_localstack/health | grep -q running || exit 1"]
+      test: ["CMD-SHELL", "curl -sfk https://localhost:4566/_localstack/health | grep -q running || exit 1"]
       interval: 5s
       timeout: 5s
       retries: 15
@@ -34,7 +34,7 @@ services:
       - AWS_ACCESS_KEY_ID=local
       - AWS_SECRET_ACCESS_KEY=local
       - DYNAMODB_ENDPOINT=http://dynamodb-local:8000
-      - SSM_ENDPOINT=http://localstack:4566
+      - SSM_ENDPOINT=https://localstack:4566
       - TELEGRAM_WEBHOOK_URL=http://localhost:3001
       - STRIPE_WEBHOOK_URL=http://localhost:3002
       - PAYPAL_WEBHOOK_URL=http://localhost:3003
@@ -65,7 +65,7 @@ services:
       - AWS_ACCESS_KEY_ID=local
       - AWS_SECRET_ACCESS_KEY=local
       - DYNAMODB_ENDPOINT=http://dynamodb-local:8000
-      - SSM_ENDPOINT=http://localstack:4566
+      - SSM_ENDPOINT=https://localstack:4566
     depends_on:
       dynamodb-local:
         condition: service_healthy
