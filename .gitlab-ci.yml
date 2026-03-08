@@ -37,7 +37,8 @@ synth:
     - npm ci
     # Stub backend binary so CDK local bundling succeeds during synth (real build happens in e2e/deploy)
     - mkdir -p backend/target/release && printf '#!/bin/sh\necho stub' > backend/target/release/dale-backend && chmod +x backend/target/release/dale-backend
-    - cd cdk && npm ci && npx cdk synth -c env=dev
+    - cd cdk && npm ci && cd ..
+    - npx cdk synth -c env=dev
   cache:
     key: dale-node-${CI_COMMIT_REF_SLUG}
     paths:
