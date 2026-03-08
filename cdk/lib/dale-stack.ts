@@ -5,6 +5,7 @@ import { Webhooks } from './constructs/webhooks.js';
 import { BlueGreenWebhooks } from './constructs/blue-green-webhooks.js';
 import { AdminApi } from './constructs/admin-api.js';
 import { WebHosting } from './constructs/web-hosting.js';
+import { FrontendHosting } from './constructs/frontend-hosting.js';
 import { AutoShutdown } from './constructs/auto-shutdown.js';
 
 export interface DaleStackProps extends cdk.StackProps {
@@ -144,6 +145,62 @@ export class DaleStack extends cdk.Stack {
 
     new cdk.CfnOutput(this, 'MeshqlUrl', {
       value: storage.meshqlUrl,
+    });
+
+    // Frontend Hosting (Consumer, Creator, Admin apps)
+    const frontendHosting = new FrontendHosting(this, 'FrontendHosting', {
+      envName: props.envName,
+      apps: [
+        {
+          name: 'consumer',
+          domainName: process.env.CONSUMER_DOMAIN,
+        },
+        {
+          name: 'creator',
+          domainName: process.env.CREATOR_DOMAIN,
+        },
+        {
+          name: 'admin',
+          domainName: process.env.ADMIN_DOMAIN,
+        },
+      ],
+      certificateArn: process.env.CERTIFICATE_ARN,
+    });
+
+    // Consumer app outputs
+    const consumerDeployment = frontendHosting.deployments.get('consumer')!;
+    new cdk.CfnOutput(this, 'ConsumerBucketName', {
+      value: consumerDeployment.bucket.bucketName,
+    });
+    new cdk.CfnOutput(this, 'ConsumerDistributionId', {
+      value: consumerDeployment.distribution.distributionId,
+    });
+    new cdk.CfnOutput(this, 'ConsumerSiteUrl', {
+      value: consumerDeployment.siteUrl,
+    });
+
+    // Creator app outputs
+    const creatorDeployment = frontendHosting.deployments.get('creator')!;
+    new cdk.CfnOutput(this, 'CreatorBucketName', {
+      value: creatorDeployment.bucket.bucketName,
+    });
+    new cdk.CfnOutput(this, 'CreatorDistributionId', {
+      value: creatorDeployment.distribution.distributionId,
+    });
+    new cdk.CfnOutput(this, 'CreatorSiteUrl', {
+      value: creatorDeployment.siteUrl,
+    });
+
+    // Admin app outputs
+    const adminDeployment = frontendHosting.deployments.get('admin')!;
+    new cdk.CfnOutput(this, 'AdminBucketName', {
+      value: adminDeployment.bucket.bucketName,
+    });
+    new cdk.CfnOutput(this, 'AdminDistributionId', {
+      value: adminDeployment.distribution.distributionId,
+    });
+    new cdk.CfnOutput(this, 'AdminSiteUrl', {
+      value: adminDeployment.siteUrl,
     });
   }
 }
