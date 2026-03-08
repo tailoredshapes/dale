@@ -53,7 +53,10 @@ e2e-local:
     - test-web
   variables:
     COMPOSE_PROJECT_NAME: dale-${CI_JOB_ID}
-  before_script: []
+  before_script:
+    # Kill any leftover dale-work containers from local dev/agent runs that may hold ports
+    - docker compose -p dale-work -f docker-compose.yml down -v 2>/dev/null || true
+    - docker ps -q --filter "name=dale-work" | xargs -r docker rm -f || true
   script:
     # Clone meshql-rs dependencies (backend has local path deps)
     - |
