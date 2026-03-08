@@ -1,5 +1,6 @@
-import { graphql, restPost } from './client.js';
+import { graphql, restPost, restPut } from './client.js';
 import type { UserRoom } from '../shared/types.js';
+import { getUserRoom } from './users.js';
 
 interface UserRoomWithStripe {
   tenant_id: string;
@@ -47,7 +48,24 @@ export async function createUserRoomMapping(
   firstName?: string,
   username?: string,
 ): Promise<void> {
-  // Let meshql-rs restlette generate the ID
+  // Check if mapping already exists (for resubscribes)
+  const existing = await getUserRoom(tenantId, telegramUserId, roomId);
+
+  if (existing) {
+    // Update existing record with new subscription details
+    const updates: Record<string, unknown> = {
+      stripe_customer_id: stripeCustomerId,
+      stripe_subscription_id: stripeSubscriptionId,
+      subscription_status: 'active',
+    };
+    if (firstName) updates.telegram_first_name = firstName;
+    if (username) updates.telegram_username = username;
+
+    await restPut<UserRoom>('/user_room/api', existing.id, updates);
+    return;
+  }
+
+  // Create new mapping - let meshql-rs restlette generate the ID
   const userRoom: UserRoomWithStripe = {
     tenant_id: tenantId,
     room_id: roomId,

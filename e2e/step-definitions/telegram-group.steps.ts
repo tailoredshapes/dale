@@ -51,14 +51,19 @@ Given<DaleWorld>(
     );
     // Wait for async processing
     await new Promise((r) => setTimeout(r, 1000));
-    // Fetch rooms to find the auto-created one
+    // Fetch rooms to find the auto-created one by telegramGroupId
     const response = await apiRequest(`${this.config.adminApiUrl}/api/rooms`, 'GET', {
       token: this.idToken,
     });
     assert.equal(response.status, 200, `List rooms failed: ${JSON.stringify(response.body)}`);
     assert.ok(Array.isArray(response.body), 'Expected rooms array');
     assert.ok(response.body.length > 0, 'Expected at least one room after bot added to group');
-    this.lastRoomId = response.body[response.body.length - 1].roomId;
+    // Find the room we just created by matching the telegramGroupId
+    const createdRoom = response.body.find(
+      (r: any) => String(r.telegramGroupId) === String(this.telegramGroupId),
+    );
+    assert.ok(createdRoom, `Room with telegramGroupId ${this.telegramGroupId} not found`);
+    this.lastRoomId = createdRoom.roomId;
   },
 );
 

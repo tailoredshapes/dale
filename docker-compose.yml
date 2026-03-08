@@ -21,6 +21,12 @@ services:
     build:
       context: .
       dockerfile: local/Dockerfile
+    ports:
+      - "4000:3000"
+      - "4001:3001"
+      - "4002:3002"
+      - "4003:3003"
+      - "4004:3004"
     environment:
       - MESHQL_URL=http://meshql-rs:8080
       - AWS_REGION=us-east-1

@@ -20,8 +20,11 @@ When<DaleWorld>('I send a POST to the Telegram webhook without a tenant', async 
 });
 
 When<DaleWorld>('I send a POST to the Telegram webhook without a secret', async function () {
-  assert.ok(this.tenantIds.length > 0, 'No tenant onboarded');
-  const tenantId = this.tenantIds[this.tenantIds.length - 1];
+  // Use a real tenant ID if available, otherwise use a fake one
+  // The test verifies that missing secret returns 401, regardless of tenant validity
+  const tenantId = this.tenantIds.length > 0
+    ? this.tenantIds[this.tenantIds.length - 1]
+    : 'fake-tenant-for-secret-test';
 
   const response = await fetch(`${this.config.telegramWebhookUrl}?tenant=${tenantId}`, {
     method: 'POST',
