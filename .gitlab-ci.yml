@@ -102,7 +102,7 @@ e2e-local:
   after_script:
     - docker compose logs || true
     - docker compose down -v || true
-    - docker run --rm -v "$(pwd)/e2e:/e2e" alpine sh -c "rm -rf /e2e/node_modules" 2>/dev/null || true
+    - rm -rf e2e/node_modules
 
 deploy-prod:
   stage: deploy
