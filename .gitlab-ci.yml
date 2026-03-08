@@ -9,7 +9,7 @@ variables:
   GIT_CLEAN_FLAGS: -ffdx -e e2e/node_modules -e node_modules
 
 before_script:
-  - git config --global url."http://oauth2:${GITLAB_TOKEN}@git.tildarc.com/tailoredshapes".insteadOf "https://git.tildarc.com/tailoredshapes"
+  - git config --global url."http://gitlab-ci-token:${CI_JOB_TOKEN}@git.tildarc.com/tailoredshapes".insteadOf "https://git.tildarc.com/tailoredshapes"
 
 test-backend:
   stage: test
@@ -60,7 +60,7 @@ e2e-local:
       PARENT=$(dirname $(pwd))
       for repo in meshql-rs merkql merksql; do
         if [ ! -d "$PARENT/tailoredshapes/$repo" ]; then
-          git clone http://oauth2:${GITLAB_TOKEN}@192.168.7.42:8929/tailoredshapes/$repo.git \
+          git clone http://gitlab-ci-token:${CI_JOB_TOKEN}@192.168.7.42:8929/tailoredshapes/$repo.git \
             "$PARENT/tailoredshapes/$repo"
         fi
       done
@@ -123,7 +123,7 @@ deploy-prod:
       PARENT=$(dirname $(pwd))
       for repo in meshql-rs merkql merksql; do
         if [ ! -d "$PARENT/tailoredshapes/$repo" ]; then
-          git clone http://oauth2:${GITLAB_TOKEN}@192.168.7.42:8929/tailoredshapes/$repo.git \
+          git clone http://gitlab-ci-token:${CI_JOB_TOKEN}@192.168.7.42:8929/tailoredshapes/$repo.git \
             "$PARENT/tailoredshapes/$repo"
         fi
       done
