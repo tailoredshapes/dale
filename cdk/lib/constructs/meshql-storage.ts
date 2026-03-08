@@ -71,6 +71,20 @@ export class MeshqlStorage extends Construct {
       handler: 'bootstrap',
       code: lambda.Code.fromAsset(path.join(__dirname, '../../../backend'), {
         bundling: {
+          // Local bundling: use pre-built binary if available (CI builds it before synth/deploy)
+          local: {
+            tryBundle(outputDir: string): boolean {
+              const fs = require('fs');
+              const path = require('path');
+              const src = path.join(__dirname, '../../../backend/target/release/dale-backend');
+              if (fs.existsSync(src)) {
+                fs.copyFileSync(src, path.join(outputDir, 'bootstrap'));
+                fs.chmodSync(path.join(outputDir, 'bootstrap'), 0o755);
+                return true;
+              }
+              return false; // fall back to Docker
+            },
+          },
           image: cdk.DockerImage.fromRegistry('ghcr.io/cargo-lambda/cargo-lambda:latest'),
           command: [
             'bash', '-c',
