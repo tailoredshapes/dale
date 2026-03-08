@@ -4,6 +4,7 @@ import * as efs from 'aws-cdk-lib/aws-efs';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
 import { Construct } from 'constructs';
 import * as path from 'path';
+import * as fs from 'fs';
 import { fileURLToPath } from 'url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -74,8 +75,6 @@ export class MeshqlStorage extends Construct {
           // Local bundling: use pre-built binary if available (CI builds it before synth/deploy)
           local: {
             tryBundle(outputDir: string): boolean {
-              const fs = require('fs');
-              const path = require('path');
               const src = path.join(__dirname, '../../../backend/target/release/dale-backend');
               if (fs.existsSync(src)) {
                 fs.copyFileSync(src, path.join(outputDir, 'bootstrap'));
