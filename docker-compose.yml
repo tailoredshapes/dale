@@ -18,7 +18,7 @@ services:
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
     healthcheck:
-      test: ["CMD-SHELL", "curl -sfk https://localhost:4566/_localstack/health | grep -q running || exit 1"]
+      test: ["CMD-SHELL", "curl -sf http://localhost:4566/_localstack/health | grep -q available || exit 1"]
       interval: 5s
       timeout: 5s
       retries: 15
