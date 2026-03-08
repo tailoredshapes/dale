@@ -55,7 +55,7 @@ e2e-local:
     - |
       echo "Waiting for setup to complete..."
       for i in $(seq 1 30); do
-        if docker compose ps setup | grep -q "Exit 0"; then
+        if docker compose ps setup | grep -qE "Exit 0|exited.*\(0\)|Exited"; then
           echo "Setup completed successfully"
           break
         fi
