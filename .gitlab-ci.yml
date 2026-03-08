@@ -52,6 +52,20 @@ e2e-local:
     COMPOSE_PROJECT_NAME: dale-${CI_JOB_ID}
   before_script: []
   script:
+    # Clone meshql-rs dependencies (backend has local path deps)
+    - |
+      PARENT=$(dirname $(pwd))
+      for repo in meshql-rs merkql merksql; do
+        if [ ! -d "$PARENT/tailoredshapes/$repo" ]; then
+          git clone http://oauth2:${GITLAB_TOKEN}@192.168.7.42:8929/tailoredshapes/$repo.git \
+            "$PARENT/tailoredshapes/$repo"
+        fi
+      done
+    # Build meshql-rs backend binary before docker compose (Dockerfile copies pre-built binary)
+    - |
+      cd backend
+      cargo build --release 2>&1 | tail -5
+      cd ..
     # Start services (isolated by COMPOSE_PROJECT_NAME)
     - docker compose down -v 2>/dev/null || true
     - docker compose up -d --build
