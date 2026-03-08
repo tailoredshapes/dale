@@ -130,5 +130,4 @@ deploy-prod:
         fi
       done
     - cd backend && cargo build --release && cd ..
-    - cd cdk && npm ci
-    - npx cdk deploy Dale-Prod -c env=prod --require-approval never
+    - cd cdk && npm ci && npx cdk deploy Dale-Prod -c env=prod --require-approval never
