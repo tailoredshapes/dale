@@ -3,9 +3,7 @@ version: '3.8'
 services:
   dynamodb-local:
     image: amazon/dynamodb-local:latest
-    command: "-jar DynamoDBLocal.jar -sharedDb -dbPath /data"
-    volumes:
-      - dynamodb-data:/data
+    command: "-jar DynamoDBLocal.jar -sharedDb -inMemory"
     healthcheck:
       test: ["CMD-SHELL", "curl -s http://localhost:8000 || exit 1"]
       interval: 5s
@@ -17,9 +15,7 @@ services:
     environment:
       - SERVICES=ssm
       - DEBUG=0
-      - PERSISTENCE=1
     volumes:
-      - localstack-data:/var/lib/localstack
       - /var/run/docker.sock:/var/run/docker.sock
     healthcheck:
       test: ["CMD-SHELL", "awslocal ssm describe-parameters || exit 1"]
@@ -75,6 +71,4 @@ services:
       localstack:
         condition: service_healthy
 
-volumes:
-  dynamodb-data:
-  localstack-data:
+volumes: {}
