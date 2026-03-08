@@ -26,8 +26,6 @@ const mockedGetMapping = vi.mocked(getTenantByPayPalPayer);
 const mockedCreateMapping = vi.mocked(createPayPalUserRoomMapping);
 const mockedSendMessage = vi.mocked(sendMessage);
 
-const TABLE = 'dale-test-table';
-
 beforeEach(() => {
   vi.clearAllMocks();
 });
@@ -66,10 +64,10 @@ describe('handleSubscriptionActivated', () => {
       },
     };
 
-    await handleSubscriptionActivated(TABLE, 'tenant-1', 'bot-token', event);
+    await handleSubscriptionActivated('tenant-1', 'bot-token', event);
 
     expect(mockedCreateMapping).toHaveBeenCalledWith(
-      TABLE, 'tenant-1', 123, 'room-1', 'PP-123', 'I-SUB456',
+      'tenant-1', 123, 'room-1', 'PP-123', 'I-SUB456',
     );
     expect(mockedSendMessage).toHaveBeenCalledWith(
       'bot-token',
@@ -87,7 +85,7 @@ describe('handleSubscriptionActivated', () => {
       },
     };
 
-    await handleSubscriptionActivated(TABLE, 'tenant-1', 'bot-token', event);
+    await handleSubscriptionActivated('tenant-1', 'bot-token', event);
     expect(mockedCreateMapping).not.toHaveBeenCalled();
   });
 
@@ -100,7 +98,7 @@ describe('handleSubscriptionActivated', () => {
       },
     };
 
-    await handleSubscriptionActivated(TABLE, 'tenant-1', 'bot-token', event);
+    await handleSubscriptionActivated('tenant-1', 'bot-token', event);
     expect(mockedCreateMapping).not.toHaveBeenCalled();
   });
 
@@ -113,7 +111,7 @@ describe('handleSubscriptionActivated', () => {
       },
     };
 
-    await handleSubscriptionActivated(TABLE, 'tenant-1', 'bot-token', event);
+    await handleSubscriptionActivated('tenant-1', 'bot-token', event);
     expect(mockedCreateMapping).not.toHaveBeenCalled();
   });
 });
@@ -121,14 +119,8 @@ describe('handleSubscriptionActivated', () => {
 describe('handleSubscriptionCancelled', () => {
   it('sends cancellation message', async () => {
     mockedGetMapping.mockResolvedValue({
-      pk: 'TENANT#tenant-1',
-      sk: 'PAYPALCUST#PP-123',
-      tenantId: 'tenant-1',
-      paypalPayerId: 'PP-123',
-      telegramUserId: 123,
-      createdAt: '',
-      GSI1pk: 'PAYPALCUST#PP-123',
-      GSI1sk: 'TENANT#tenant-1',
+      tenant_id: 'tenant-1',
+      telegram_user_id: 123,
     });
     const event = {
       resource: {
@@ -136,7 +128,7 @@ describe('handleSubscriptionCancelled', () => {
       },
     };
 
-    await handleSubscriptionCancelled(TABLE, 'tenant-1', 'bot-token', event);
+    await handleSubscriptionCancelled('tenant-1', 'bot-token', event);
 
     expect(mockedSendMessage).toHaveBeenCalledWith(
       'bot-token',
@@ -153,7 +145,7 @@ describe('handleSubscriptionCancelled', () => {
       },
     };
 
-    await handleSubscriptionCancelled(TABLE, 'tenant-1', 'bot-token', event);
+    await handleSubscriptionCancelled('tenant-1', 'bot-token', event);
     expect(mockedSendMessage).not.toHaveBeenCalled();
   });
 });
@@ -161,14 +153,8 @@ describe('handleSubscriptionCancelled', () => {
 describe('handleSubscriptionSuspended', () => {
   it('sends past due message', async () => {
     mockedGetMapping.mockResolvedValue({
-      pk: 'TENANT#tenant-1',
-      sk: 'PAYPALCUST#PP-123',
-      tenantId: 'tenant-1',
-      paypalPayerId: 'PP-123',
-      telegramUserId: 123,
-      createdAt: '',
-      GSI1pk: 'PAYPALCUST#PP-123',
-      GSI1sk: 'TENANT#tenant-1',
+      tenant_id: 'tenant-1',
+      telegram_user_id: 123,
     });
     const event = {
       resource: {
@@ -176,7 +162,7 @@ describe('handleSubscriptionSuspended', () => {
       },
     };
 
-    await handleSubscriptionSuspended(TABLE, 'tenant-1', 'bot-token', event);
+    await handleSubscriptionSuspended('tenant-1', 'bot-token', event);
 
     expect(mockedSendMessage).toHaveBeenCalledWith(
       'bot-token',

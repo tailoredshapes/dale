@@ -6,24 +6,19 @@ vi.mock('../../db/tenants.js', () => ({
   updateTenant: vi.fn(),
 }));
 
-vi.mock('../../db/webhook-secrets.js', () => ({
-  createWebhookSecretMapping: vi.fn(),
-}));
-
 import { handleGetTenant, handleUpdateTenant, handleOnboard, handleConfigurePayment } from '../routes/tenant.js';
-import { getTenantById } from '../../db/tenants.js';
+import { getTenantById, createTenant, updateTenant } from '../../db/tenants.js';
 
 const mockedGetTenant = vi.mocked(getTenantById);
+const mockedCreateTenant = vi.mocked(createTenant);
+const mockedUpdateTenant = vi.mocked(updateTenant);
 
-const TABLE = 'dale-test-table';
-const AUTH = { cognitoSub: 'sub-123', tenantId: 'tenant-1' };
+const AUTH = { tenantId: 'tenant-1' };
 
 function makeDeps(overrides: Record<string, unknown> = {}) {
   return {
     generateId: () => 'new-tenant-id',
     generateSecret: () => 'webhook-secret',
-    storeSecrets: vi.fn(),
-    createWebhookSecretMapping: vi.fn(),
     setWebhook: vi.fn().mockResolvedValue(true),
     registerPayPalWebhook: vi.fn().mockResolvedValue('WH-auto-123'),
     telegramWebhookUrl: 'https://tg.example.com',
@@ -41,18 +36,11 @@ beforeEach(() => {
 describe('handleGetTenant', () => {
   it('returns tenant data', async () => {
     mockedGetTenant.mockResolvedValue({
-      pk: 'TENANT#tenant-1',
-      sk: 'METADATA',
-      tenantId: 'tenant-1',
-      cognitoSub: 'sub-123',
-      displayName: 'Test Creator',
-      createdAt: '2024-01-01',
-      updatedAt: '2024-01-01',
-      GSI1pk: 'COGNITO#sub-123',
-      GSI1sk: 'TENANT',
+      id: 'tenant-1',
+      display_name: 'Test Creator',
     });
 
-    const result = await handleGetTenant(TABLE, AUTH);
+    const result = await handleGetTenant(AUTH);
     expect(result.statusCode).toBe(200);
     const body = JSON.parse(result.body);
     expect(body.tenantId).toBe('tenant-1');
@@ -61,19 +49,25 @@ describe('handleGetTenant', () => {
 
   it('returns 404 when not found', async () => {
     mockedGetTenant.mockResolvedValue(null);
-    const result = await handleGetTenant(TABLE, AUTH);
+    const result = await handleGetTenant(AUTH);
     expect(result.statusCode).toBe(404);
   });
 });
 
 describe('handleUpdateTenant', () => {
   it('updates tenant', async () => {
-    const result = await handleUpdateTenant(TABLE, AUTH, JSON.stringify({ displayName: 'New' }));
+    mockedUpdateTenant.mockResolvedValue({
+      id: 'tenant-1',
+      display_name: 'New',
+    });
+
+    const result = await handleUpdateTenant(AUTH, JSON.stringify({ displayName: 'New' }));
     expect(result.statusCode).toBe(200);
+    expect(mockedUpdateTenant).toHaveBeenCalledWith('tenant-1', { display_name: 'New' });
   });
 
   it('returns 400 for invalid JSON', async () => {
-    const result = await handleUpdateTenant(TABLE, AUTH, 'bad');
+    const result = await handleUpdateTenant(AUTH, 'bad');
     expect(result.statusCode).toBe(400);
   });
 });
@@ -81,8 +75,12 @@ describe('handleUpdateTenant', () => {
 describe('handleOnboard', () => {
   it('creates tenant with Stripe and returns tenantId', async () => {
     const deps = makeDeps();
+    mockedCreateTenant.mockResolvedValue({
+      id: 'new-tenant-id',
+      display_name: 'New Creator',
+    });
 
-    const result = await handleOnboard(TABLE, 'sub-123', JSON.stringify({
+    const result = await handleOnboard('sub-123', JSON.stringify({
       displayName: 'New Creator',
       telegramBotToken: '123:ABC',
       stripeSecretKey: 'sk_test',
@@ -96,11 +94,16 @@ describe('handleOnboard', () => {
     expect(body.stripeWebhookUrl).toBe('https://stripe.example.com?tenant=new-tenant-id');
     expect(body.paypalWebhookUrl).toBeUndefined();
 
-    expect(deps.storeSecrets).toHaveBeenCalledWith('new-tenant-id', {
-      'telegram-bot-token': '123:ABC',
-      'telegram-webhook-secret': 'webhook-secret',
-      'stripe-secret-key': 'sk_test',
-      'stripe-webhook-secret': 'whsec_test',
+    expect(mockedCreateTenant).toHaveBeenCalledWith({
+      id: 'new-tenant-id',
+      display_name: 'New Creator',
+      telegram_bot_token: '123:ABC',
+      webhook_secret: 'webhook-secret',
+      stripe_secret_key: 'sk_test',
+      stripe_webhook_secret: 'whsec_test',
+      paypal_client_id: undefined,
+      paypal_client_secret: undefined,
+      paypal_webhook_id: undefined,
     });
 
     expect(deps.registerPayPalWebhook).not.toHaveBeenCalled();
@@ -108,8 +111,12 @@ describe('handleOnboard', () => {
 
   it('creates tenant with PayPal only (auto-registers webhook)', async () => {
     const deps = makeDeps();
+    mockedCreateTenant.mockResolvedValue({
+      id: 'new-tenant-id',
+      display_name: 'PayPal Creator',
+    });
 
-    const result = await handleOnboard(TABLE, 'sub-123', JSON.stringify({
+    const result = await handleOnboard('sub-123', JSON.stringify({
       displayName: 'PayPal Creator',
       telegramBotToken: '123:ABC',
       paypalClientId: 'pp-client',
@@ -135,20 +142,16 @@ describe('handleOnboard', () => {
         'PAYMENT.SALE.DENIED',
       ],
     );
-
-    expect(deps.storeSecrets).toHaveBeenCalledWith('new-tenant-id', {
-      'telegram-bot-token': '123:ABC',
-      'telegram-webhook-secret': 'webhook-secret',
-      'paypal-client-id': 'pp-client',
-      'paypal-client-secret': 'pp-secret',
-      'paypal-webhook-id': 'WH-auto-123',
-    });
   });
 
   it('creates tenant with both providers', async () => {
     const deps = makeDeps();
+    mockedCreateTenant.mockResolvedValue({
+      id: 'new-tenant-id',
+      display_name: 'Both Creator',
+    });
 
-    const result = await handleOnboard(TABLE, 'sub-123', JSON.stringify({
+    const result = await handleOnboard('sub-123', JSON.stringify({
       displayName: 'Both Creator',
       telegramBotToken: '123:ABC',
       stripeSecretKey: 'sk_test',
@@ -170,7 +173,7 @@ describe('handleOnboard', () => {
       registerPayPalWebhook: vi.fn().mockRejectedValue(new Error('PayPal webhook registration failed: 422')),
     });
 
-    const result = await handleOnboard(TABLE, 'sub-123', JSON.stringify({
+    const result = await handleOnboard('sub-123', JSON.stringify({
       displayName: 'Fail Creator',
       telegramBotToken: '123:ABC',
       paypalClientId: 'pp-client',
@@ -182,13 +185,18 @@ describe('handleOnboard', () => {
   });
 
   it('returns 400 for missing fields', async () => {
-    const result = await handleOnboard(TABLE, 'sub-123', JSON.stringify({ displayName: 'Test' }), makeDeps());
+    const result = await handleOnboard('sub-123', JSON.stringify({ displayName: 'Test' }), makeDeps());
     expect(result.statusCode).toBe(400);
   });
 
   it('creates tenant without payment providers', async () => {
     const deps = makeDeps();
-    const result = await handleOnboard(TABLE, 'sub-123', JSON.stringify({
+    mockedCreateTenant.mockResolvedValue({
+      id: 'new-tenant-id',
+      display_name: 'No Payment Creator',
+    });
+
+    const result = await handleOnboard('sub-123', JSON.stringify({
       displayName: 'No Payment Creator',
       telegramBotToken: '123:ABC',
     }), deps);
@@ -200,17 +208,12 @@ describe('handleOnboard', () => {
     expect(body.stripeWebhookUrl).toBeUndefined();
     expect(body.paypalWebhookUrl).toBeUndefined();
 
-    expect(deps.storeSecrets).toHaveBeenCalledWith('new-tenant-id', {
-      'telegram-bot-token': '123:ABC',
-      'telegram-webhook-secret': 'webhook-secret',
-    });
     expect(deps.registerPayPalWebhook).not.toHaveBeenCalled();
   });
 });
 
 function makePaymentDeps(overrides: Record<string, unknown> = {}) {
   return {
-    storeSecrets: vi.fn(),
     registerPayPalWebhook: vi.fn().mockResolvedValue('WH-auto-456'),
     stripeWebhookUrl: 'https://stripe.example.com',
     paypalWebhookUrl: 'https://paypal.example.com',
@@ -222,6 +225,11 @@ function makePaymentDeps(overrides: Record<string, unknown> = {}) {
 describe('handleConfigurePayment', () => {
   it('configures Stripe credentials', async () => {
     const deps = makePaymentDeps();
+    mockedUpdateTenant.mockResolvedValue({
+      id: 'tenant-1',
+      display_name: 'Test',
+    });
+
     const result = await handleConfigurePayment(AUTH, JSON.stringify({
       stripeSecretKey: 'sk_test',
       stripeWebhookSecret: 'whsec_test',
@@ -233,15 +241,20 @@ describe('handleConfigurePayment', () => {
     expect(body.stripeWebhookUrl).toBe('https://stripe.example.com?tenant=tenant-1');
     expect(body.paypalWebhookUrl).toBeUndefined();
 
-    expect(deps.storeSecrets).toHaveBeenCalledWith('tenant-1', {
-      'stripe-secret-key': 'sk_test',
-      'stripe-webhook-secret': 'whsec_test',
+    expect(mockedUpdateTenant).toHaveBeenCalledWith('tenant-1', {
+      stripe_secret_key: 'sk_test',
+      stripe_webhook_secret: 'whsec_test',
     });
     expect(deps.registerPayPalWebhook).not.toHaveBeenCalled();
   });
 
   it('configures PayPal credentials and auto-registers webhook', async () => {
     const deps = makePaymentDeps();
+    mockedUpdateTenant.mockResolvedValue({
+      id: 'tenant-1',
+      display_name: 'Test',
+    });
+
     const result = await handleConfigurePayment(AUTH, JSON.stringify({
       paypalClientId: 'pp-client',
       paypalClientSecret: 'pp-secret',
@@ -260,10 +273,10 @@ describe('handleConfigurePayment', () => {
       expect.any(Array),
     );
 
-    expect(deps.storeSecrets).toHaveBeenCalledWith('tenant-1', {
-      'paypal-client-id': 'pp-client',
-      'paypal-client-secret': 'pp-secret',
-      'paypal-webhook-id': 'WH-auto-456',
+    expect(mockedUpdateTenant).toHaveBeenCalledWith('tenant-1', {
+      paypal_client_id: 'pp-client',
+      paypal_client_secret: 'pp-secret',
+      paypal_webhook_id: 'WH-auto-456',
     });
   });
 

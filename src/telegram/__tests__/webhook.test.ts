@@ -105,15 +105,11 @@ describe('Telegram webhook handler', () => {
 
   it('handles /start in DM with rooms', async () => {
     mockedListRooms.mockResolvedValue([{
-      pk: 'TENANT#tenant-1',
-      sk: 'ROOM#r1',
-      tenantId: 'tenant-1',
-      roomId: 'r1',
+      id: 'r1',
+      tenant_id: 'tenant-1',
       name: 'VIP',
-      paymentLink: 'https://buy.stripe.com/test',
-      isActive: true,
-      createdAt: '',
-      updatedAt: '',
+      payment_link: 'https://buy.stripe.com/test',
+      active: true,
     }]);
 
     await handler(makeEvent('/start'));

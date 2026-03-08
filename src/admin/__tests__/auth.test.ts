@@ -2,20 +2,21 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { APIGatewayProxyEventV2 } from 'aws-lambda';
 
 vi.mock('../../db/tenants.js', () => ({
-  getTenantByCognitoSub: vi.fn(),
+  getTenantByWebhookSecret: vi.fn(),
 }));
 
 import { extractAuthContext, extractCognitoSub } from '../middleware/auth.js';
-import { getTenantByCognitoSub } from '../../db/tenants.js';
+import { getTenantByWebhookSecret } from '../../db/tenants.js';
 
-const mockedGetTenant = vi.mocked(getTenantByCognitoSub);
+const mockedGetTenant = vi.mocked(getTenantByWebhookSecret);
 
 beforeEach(() => {
   vi.clearAllMocks();
 });
 
-function makeEvent(sub?: string): APIGatewayProxyEventV2 {
+function makeEvent(secret?: string, sub?: string): APIGatewayProxyEventV2 {
   return {
+    headers: secret ? { 'x-webhook-secret': secret } : {},
     requestContext: {
       authorizer: sub ? { jwt: { claims: { sub } } } : undefined,
     },
@@ -24,7 +25,7 @@ function makeEvent(sub?: string): APIGatewayProxyEventV2 {
 
 describe('extractCognitoSub', () => {
   it('extracts sub from JWT claims', () => {
-    const result = extractCognitoSub(makeEvent('user-123'));
+    const result = extractCognitoSub(makeEvent(undefined, 'user-123'));
     expect(result).toBe('user-123');
   });
 
@@ -37,29 +38,23 @@ describe('extractCognitoSub', () => {
 describe('extractAuthContext', () => {
   it('returns auth context for existing tenant', async () => {
     mockedGetTenant.mockResolvedValue({
-      pk: 'TENANT#t1',
-      sk: 'METADATA',
-      tenantId: 't1',
-      cognitoSub: 'user-123',
-      displayName: 'Test',
-      createdAt: '',
-      updatedAt: '',
-      GSI1pk: 'COGNITO#user-123',
-      GSI1sk: 'TENANT',
+      id: 't1',
+      display_name: 'Test',
+      webhook_secret: 'secret-123',
     });
 
-    const result = await extractAuthContext(makeEvent('user-123'), 'table');
-    expect(result).toEqual({ cognitoSub: 'user-123', tenantId: 't1' });
+    const result = await extractAuthContext(makeEvent('secret-123'));
+    expect(result).toEqual({ tenantId: 't1' });
   });
 
-  it('returns null if no cognito sub', async () => {
-    const result = await extractAuthContext(makeEvent(), 'table');
+  it('returns null if no webhook secret header', async () => {
+    const result = await extractAuthContext(makeEvent());
     expect(result).toBeNull();
   });
 
   it('returns null if tenant not found', async () => {
     mockedGetTenant.mockResolvedValue(null);
-    const result = await extractAuthContext(makeEvent('unknown'), 'table');
+    const result = await extractAuthContext(makeEvent('unknown-secret'));
     expect(result).toBeNull();
   });
 });

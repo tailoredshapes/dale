@@ -14,14 +14,12 @@ import type { TelegramChatMemberUpdated } from '../../shared/types.js';
 
 const mockedCreateRoom = vi.mocked(createRoom);
 
-const TABLE = 'dale-test-table';
-
 beforeEach(() => {
   vi.clearAllMocks();
 });
 
 describe('handleMyChatMember', () => {
-  const ctx = { tableName: TABLE, tenantId: 'tenant-1', botUserId: 123 };
+  const ctx = { tenantId: 'tenant-1', botUserId: 123 };
 
   it('creates room when bot is added as member', async () => {
     const update: TelegramChatMemberUpdated = {
@@ -34,13 +32,13 @@ describe('handleMyChatMember', () => {
 
     await handleMyChatMember(ctx, update);
 
-    expect(mockedCreateRoom).toHaveBeenCalledWith(TABLE, {
-      tenantId: 'tenant-1',
-      roomId: '01TEST',
+    expect(mockedCreateRoom).toHaveBeenCalledWith({
+      id: '01TEST',
+      tenant_id: 'tenant-1',
       name: 'My Group',
-      telegramGroupId: -100999,
-      paymentLink: '',
-      isActive: false,
+      telegram_group_id: '-100999',
+      payment_link: '',
+      active: false,
     });
   });
 

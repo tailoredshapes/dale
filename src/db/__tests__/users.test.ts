@@ -1,125 +1,230 @@
-import { describe, it, expect, beforeEach } from 'vitest';
-import { mockClient } from 'aws-sdk-client-mock';
-import { GetCommand, PutCommand, QueryCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
-import { docClient } from '../client.js';
-import { getUserProfile, createUserProfile, getUserRoom, listUserRooms, listRoomSubscribers, updateUserRoomStatus } from '../users.js';
+import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
+import { getUserRoom, listUserRooms, listRoomSubscribers, updateUserRoomStatus, createUserRoom, getUserRoomById } from '../users.js';
+import { MESHQL_URL } from '../client.js';
 
-const ddbMock = mockClient(docClient);
-const TABLE = 'dale-test-table';
+const mockFetch = vi.fn();
+vi.stubGlobal('fetch', mockFetch);
 
 beforeEach(() => {
-  ddbMock.reset();
+  mockFetch.mockReset();
 });
 
-describe('getUserProfile', () => {
-  it('returns profile when found', async () => {
-    const profile = {
-      pk: 'TENANT#t1',
-      sk: 'USER#123',
-      tenantId: 't1',
-      telegramUserId: 123,
-    };
-    ddbMock.on(GetCommand).resolves({ Item: profile });
-
-    const result = await getUserProfile(TABLE, 't1', 123);
-    expect(result).toEqual(profile);
-  });
-
-  it('returns null when not found', async () => {
-    ddbMock.on(GetCommand).resolves({});
-    const result = await getUserProfile(TABLE, 't1', 999);
-    expect(result).toBeNull();
-  });
-});
-
-describe('createUserProfile', () => {
-  it('writes user profile with tenant prefix', async () => {
-    ddbMock.on(PutCommand).resolves({});
-
-    const result = await createUserProfile(TABLE, 't1', 123, 'Test', 'testuser');
-    expect(result.pk).toBe('TENANT#t1');
-    expect(result.sk).toBe('USER#123');
-    expect(result.tenantId).toBe('t1');
-    expect(result.telegramUserId).toBe(123);
-    expect(result.firstName).toBe('Test');
-  });
+afterEach(() => {
+  vi.restoreAllMocks();
 });
 
 describe('getUserRoom', () => {
-  it('returns user room when found', async () => {
+  it('returns user room when found via GraphQL', async () => {
     const userRoom = {
-      pk: 'TENANT#t1',
-      sk: 'USERROOM#123#ROOM#r1',
-      subscriptionStatus: 'active',
+      id: 'ur-1',
+      tenant_id: 't1',
+      room_id: 'r1',
+      telegram_user_id: 123,
+      subscription_status: 'active',
     };
-    ddbMock.on(GetCommand).resolves({ Item: userRoom });
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ data: { getByTenantUserRoom: userRoom } }),
+    });
 
-    const result = await getUserRoom(TABLE, 't1', 123, 'r1');
+    const result = await getUserRoom('t1', 123, 'r1');
     expect(result).toEqual(userRoom);
+
+    expect(mockFetch).toHaveBeenCalledWith(
+      `${MESHQL_URL}/user_room/graph`,
+      expect.objectContaining({
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    );
+    const body = JSON.parse(mockFetch.mock.calls[0][1].body);
+    expect(body.variables).toEqual({ tenant_id: 't1', telegram_user_id: 123, room_id: 'r1' });
   });
 
   it('returns null when not found', async () => {
-    ddbMock.on(GetCommand).resolves({});
-    const result = await getUserRoom(TABLE, 't1', 123, 'missing');
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ data: { getByTenantUserRoom: null } }),
+    });
+
+    const result = await getUserRoom('t1', 123, 'missing');
     expect(result).toBeNull();
   });
 });
 
 describe('listUserRooms', () => {
-  it('returns user rooms with correct key prefix', async () => {
+  it('returns user rooms via GraphQL', async () => {
     const rooms = [
-      { pk: 'TENANT#t1', sk: 'USERROOM#123#ROOM#r1', roomId: 'r1' },
-      { pk: 'TENANT#t1', sk: 'USERROOM#123#ROOM#r2', roomId: 'r2' },
+      { id: 'ur-1', tenant_id: 't1', room_id: 'r1', telegram_user_id: 123 },
+      { id: 'ur-2', tenant_id: 't1', room_id: 'r2', telegram_user_id: 123 },
     ];
-    ddbMock.on(QueryCommand).resolves({ Items: rooms });
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ data: { getByTenantAndUser: rooms } }),
+    });
 
-    const result = await listUserRooms(TABLE, 't1', 123);
+    const result = await listUserRooms('t1', 123);
     expect(result).toHaveLength(2);
+    expect(result).toEqual(rooms);
 
-    const call = ddbMock.commandCalls(QueryCommand)[0];
-    expect(call.args[0].input.ExpressionAttributeValues![':skPrefix']).toBe('USERROOM#123#ROOM#');
+    const body = JSON.parse(mockFetch.mock.calls[0][1].body);
+    expect(body.variables).toEqual({ tenant_id: 't1', telegram_user_id: 123 });
+  });
+
+  it('returns empty array when none found', async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ data: { getByTenantAndUser: null } }),
+    });
+
+    const result = await listUserRooms('t1', 123);
+    expect(result).toEqual([]);
   });
 });
 
 describe('listRoomSubscribers', () => {
-  it('returns filtered subscribers for a room', async () => {
+  it('returns subscribers for a room via GraphQL', async () => {
     const items = [
-      { pk: 'TENANT#t1', sk: 'USERROOM#123#ROOM#r1', roomId: 'r1' },
-      { pk: 'TENANT#t1', sk: 'USERROOM#456#ROOM#r2', roomId: 'r2' },
-      { pk: 'TENANT#t1', sk: 'USERROOM#789#ROOM#r1', roomId: 'r1' },
+      { id: 'ur-1', tenant_id: 't1', room_id: 'r1', telegram_user_id: 123 },
+      { id: 'ur-2', tenant_id: 't1', room_id: 'r1', telegram_user_id: 456 },
     ];
-    ddbMock.on(QueryCommand).resolves({ Items: items });
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ data: { getByTenantAndRoom: items } }),
+    });
 
-    const result = await listRoomSubscribers(TABLE, 't1', 'r1');
+    const result = await listRoomSubscribers('t1', 'r1');
     expect(result).toHaveLength(2);
-    expect(result.every((ur) => ur.roomId === 'r1')).toBe(true);
+
+    const body = JSON.parse(mockFetch.mock.calls[0][1].body);
+    expect(body.variables).toEqual({ tenant_id: 't1', room_id: 'r1' });
   });
 });
 
 describe('updateUserRoomStatus', () => {
-  it('updates status without subscriptionId', async () => {
-    ddbMock.on(UpdateCommand).resolves({});
+  it('updates status via REST PUT after finding existing record', async () => {
+    const existing = {
+      id: 'ur-1',
+      tenant_id: 't1',
+      room_id: 'r1',
+      telegram_user_id: 123,
+      subscription_status: 'active',
+    };
 
-    await updateUserRoomStatus(TABLE, 't1', 123, 'r1', 'past_due');
-
-    const call = ddbMock.commandCalls(UpdateCommand)[0];
-    const input = call.args[0].input;
-    expect(input.Key).toEqual({
-      pk: 'TENANT#t1',
-      sk: 'USERROOM#123#ROOM#r1',
+    // First call: GraphQL to find existing
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ data: { getByTenantUserRoom: existing } }),
     });
-    expect(input.ExpressionAttributeValues![':status']).toBe('past_due');
-    expect(input.UpdateExpression).not.toContain('#subId');
+
+    // Second call: REST PUT to update
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ ...existing, subscription_status: 'past_due' }),
+    });
+
+    await updateUserRoomStatus('t1', 123, 'r1', 'past_due');
+
+    expect(mockFetch).toHaveBeenCalledTimes(2);
+
+    // Verify PUT call
+    expect(mockFetch.mock.calls[1][0]).toBe(`${MESHQL_URL}/user_room/api/ur-1`);
+    expect(mockFetch.mock.calls[1][1].method).toBe('PUT');
+    const putBody = JSON.parse(mockFetch.mock.calls[1][1].body);
+    expect(putBody.subscription_status).toBe('past_due');
   });
 
-  it('updates status with subscriptionId', async () => {
-    ddbMock.on(UpdateCommand).resolves({});
+  it('updates status with stripeSubscriptionId', async () => {
+    const existing = {
+      id: 'ur-1',
+      tenant_id: 't1',
+      room_id: 'r1',
+      telegram_user_id: 123,
+      subscription_status: 'active',
+    };
 
-    await updateUserRoomStatus(TABLE, 't1', 123, 'r1', 'active', 'sub_new');
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ data: { getByTenantUserRoom: existing } }),
+    });
 
-    const call = ddbMock.commandCalls(UpdateCommand)[0];
-    const input = call.args[0].input;
-    expect(input.ExpressionAttributeValues![':subId']).toBe('sub_new');
-    expect(input.UpdateExpression).toContain('#subId');
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ ...existing, subscription_status: 'active', stripe_subscription_id: 'sub_new' }),
+    });
+
+    await updateUserRoomStatus('t1', 123, 'r1', 'active', 'sub_new');
+
+    const putBody = JSON.parse(mockFetch.mock.calls[1][1].body);
+    expect(putBody.stripe_subscription_id).toBe('sub_new');
+    expect(putBody.subscription_status).toBe('active');
+  });
+
+  it('throws when user room not found', async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ data: { getByTenantUserRoom: null } }),
+    });
+
+    await expect(updateUserRoomStatus('t1', 123, 'r1', 'past_due'))
+      .rejects.toThrow('UserRoom not found');
+  });
+});
+
+describe('createUserRoom', () => {
+  it('creates user room via REST POST', async () => {
+    const userRoom = {
+      id: 'ur-new',
+      tenant_id: 't1',
+      room_id: 'r1',
+      telegram_user_id: 123,
+      subscription_status: 'active' as const,
+    };
+
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => userRoom,
+    });
+
+    const result = await createUserRoom(userRoom);
+    expect(result).toEqual(userRoom);
+
+    expect(mockFetch).toHaveBeenCalledWith(
+      `${MESHQL_URL}/user_room/api`,
+      expect.objectContaining({
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    );
+  });
+});
+
+describe('getUserRoomById', () => {
+  it('returns user room via REST GET', async () => {
+    const userRoom = {
+      id: 'ur-1',
+      tenant_id: 't1',
+      room_id: 'r1',
+      telegram_user_id: 123,
+    };
+
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => userRoom,
+    });
+
+    const result = await getUserRoomById('ur-1');
+    expect(result).toEqual(userRoom);
+    expect(mockFetch).toHaveBeenCalledWith(`${MESHQL_URL}/user_room/api/ur-1`);
+  });
+
+  it('returns null when not found (404)', async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: false,
+      status: 404,
+    });
+
+    const result = await getUserRoomById('ur-missing');
+    expect(result).toBeNull();
   });
 });
