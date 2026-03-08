@@ -39,6 +39,27 @@ export class DaleWorld extends World {
   tenantIds: string[] = [];
   webhookSecrets: string[] = [];
 
+  // Multi-tenant support
+  secondTenantId?: string;
+  secondTenantToken?: string;
+  secondTenantWebhookSecret?: string;
+  tenantAWebhookSecret?: string;
+  tenantARoomId?: string;
+  tenantBRoomId?: string;
+
+  // Stripe/PayPal subscription tracking
+  stripeCustomerId?: string;
+  stripeSubscriptionId?: string;
+  paypalPayerId?: string;
+  paypalSubscriptionId?: string;
+
+  // Multi-room support
+  roomA?: { roomId: string; telegramGroupId: number; stripeSubscriptionId?: string };
+  roomB?: { roomId: string; telegramGroupId: number; stripeSubscriptionId?: string };
+
+  // Stored values for comparisons
+  storedValues: Record<string, string> = {};
+
   constructor(options: any) {
     super(options);
     this.config = loadConfig();

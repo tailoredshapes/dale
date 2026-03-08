@@ -6,6 +6,8 @@ export interface E2EConfig {
   adminApiUrl: string;
   telegramWebhookUrl: string;
   stripeWebhookUrl: string;
+  paypalWebhookUrl: string;
+  telegramMockUrl: string;
   userPoolId: string;
   userPoolClientId: string;
   webDistributionUrl: string;
@@ -68,6 +70,8 @@ export function loadConfig(): E2EConfig {
     adminApiUrl: get('E2E_ADMIN_API_URL', 'AdminApiUrl'),
     telegramWebhookUrl: get('E2E_TELEGRAM_WEBHOOK_URL', 'TelegramWebhookUrl'),
     stripeWebhookUrl: get('E2E_STRIPE_WEBHOOK_URL', 'StripeWebhookUrl'),
+    paypalWebhookUrl: process.env.E2E_PAYPAL_WEBHOOK_URL ?? cdkOutputs['PayPalWebhookUrl'] ?? '',
+    telegramMockUrl: process.env.E2E_TELEGRAM_MOCK_URL ?? '',
     userPoolId: get('E2E_USER_POOL_ID', 'UserPoolId'),
     userPoolClientId: get('E2E_USER_POOL_CLIENT_ID', 'UserPoolClientId'),
     webDistributionUrl: get('E2E_WEB_DISTRIBUTION_URL', 'WebDistributionUrl'),
@@ -91,6 +95,8 @@ function loadLocalConfig(): E2EConfig {
     adminApiUrl: process.env.E2E_ADMIN_API_URL ?? `http://${host}:3000`,
     telegramWebhookUrl: process.env.E2E_TELEGRAM_WEBHOOK_URL ?? `http://${host}:3001`,
     stripeWebhookUrl: process.env.E2E_STRIPE_WEBHOOK_URL ?? `http://${host}:3002`,
+    paypalWebhookUrl: process.env.E2E_PAYPAL_WEBHOOK_URL ?? `http://${host}:3003`,
+    telegramMockUrl: process.env.E2E_TELEGRAM_MOCK_URL ?? `http://${host}:3004`,
     userPoolId: 'local-pool',
     userPoolClientId: 'local-client',
     webDistributionUrl: `http://${host}:5173`,
