@@ -4,8 +4,6 @@ services:
   dynamodb-local:
     image: amazon/dynamodb-local:latest
     container_name: dale-dynamodb
-    ports:
-      - "8000:8000"
     command: "-jar DynamoDBLocal.jar -sharedDb -dbPath /data"
     volumes:
       - dynamodb-data:/data
@@ -18,8 +16,6 @@ services:
   localstack:
     image: localstack/localstack:3.0
     container_name: dale-localstack
-    ports:
-      - "4566:4566"
     environment:
       - SERVICES=ssm
       - DEBUG=0
@@ -38,12 +34,6 @@ services:
       context: .
       dockerfile: local/Dockerfile
     container_name: dale-api
-    ports:
-      - "13000:3000"
-      - "3001:3001"
-      - "3002:3002"
-      - "3003:3003"
-      - "3004:3004"
     environment:
       - TABLE_NAME=dale-local
       - AWS_REGION=us-east-1
