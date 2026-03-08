@@ -8,7 +8,7 @@ import assert from 'node:assert/strict';
 Given<DaleWorld>('I have retrieved the webhook secret', async function () {
   assert.ok(this.tenantIds.length > 0, 'No tenant onboarded');
   const tenantId = this.tenantIds[this.tenantIds.length - 1];
-  const secret = await getSSMParameter(`/dale/tenants/${tenantId}/telegram-webhook-secret`);
+  const secret = await getSSMParameter(`/dale/tenants/${tenantId}/telegram-webhook-secret`, this.config);
   this.webhookSecret = secret;
   this.webhookSecrets.push(secret);
 });
@@ -70,6 +70,14 @@ Given<DaleWorld>(
       },
     );
     assert.equal(response.status, 200, `Activate room failed: ${JSON.stringify(response.body)}`);
+
+    // Track as Room A if not already set (for multi-room scenarios)
+    if (!this.roomA) {
+      this.roomA = {
+        roomId: this.lastRoomId,
+        telegramGroupId: this.telegramGroupId!,
+      };
+    }
   },
 );
 
