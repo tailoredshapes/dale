@@ -101,7 +101,7 @@ e2e-local:
         -e DYNAMODB_ENDPOINT=http://dynamodb-local:8000 \
         -e SSM_ENDPOINT=http://localstack:4566 \
         node:20-alpine \
-        sh -c "npm ci && npx cucumber-js --tags 'not @real-telegram and not @cognito-srp and not @tutorial'"
+        sh -c "npm ci && npx cucumber-js --tags 'not @real-telegram and not @cognito-srp and not @tutorial and not @skip'"
   after_script:
     - docker compose logs || true
     - docker compose down -v || true

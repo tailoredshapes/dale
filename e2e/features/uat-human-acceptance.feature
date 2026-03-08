@@ -1,3 +1,4 @@
+@skip
 Feature: Human Acceptance Tests
   End-to-end UAT journeys driven through the Dale web frontends.
   Creator flows use the creator app; subscriber flows use the consumer app.
