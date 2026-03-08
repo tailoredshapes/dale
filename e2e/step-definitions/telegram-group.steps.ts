@@ -141,13 +141,8 @@ Then<DaleWorld>('the room should have a telegramGroupId', function () {
   assert.ok(room.telegramGroupId !== undefined && room.telegramGroupId !== null, 'Expected telegramGroupId');
 });
 
-Then<DaleWorld>('the room should not be active', function () {
-  assert.ok(this.lastResponse, 'No response recorded');
-  assert.ok(Array.isArray(this.lastResponse.body), 'Expected body to be an array');
-  const room = this.lastResponse.body.find((r: any) => r.roomId === this.lastRoomId);
-  assert.ok(room, 'No room found');
-  assert.equal(room.isActive, false);
-});
+// Note: 'the room should not be active' is defined in admin-rooms-exhaustive.steps.ts
+// and handles both single room (object) and list of rooms (array) responses
 
 When<DaleWorld>("I check the auto-created room's subscribers", async function () {
   assert.ok(this.idToken, 'No auth token available');
