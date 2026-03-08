@@ -73,17 +73,6 @@ e2e-local:
     - docker compose down -v 2>/dev/null || true
     - docker compose up -d --build
 
-    # Wait for setup to complete (blocks until container exits)
-    - |
-      echo "Waiting for setup container to finish..."
-      SETUP_CONTAINER="${COMPOSE_PROJECT_NAME}-setup-1"
-      exit_code=$(docker wait "$SETUP_CONTAINER" 2>/dev/null || echo "1")
-      echo "Setup exited with code: $exit_code"
-      if [ "$exit_code" != "0" ]; then
-        docker compose logs setup || true
-        exit 1
-      fi
-
     # Wait for API to be healthy (service name dale-api, container name is project-prefixed)
     - |
       echo "Waiting for dale-api to be healthy..."
