@@ -97,6 +97,8 @@ Feature: Stripe Subscription Lifecycle
   Scenario: Checkout with mismatched tenant in client_reference_id is ignored
     Given I have onboarded a tenant with display name "Stripe Mismatch"
     And I have retrieved the webhook secret
+    And I have simulated the bot being added to group "Mismatch Room"
+    And I have activated the auto-created room with payment link "https://buy.stripe.com/test_mismatch"
     When a Stripe checkout.session.completed event fires with tenant "wrong-tenant-id" in client_reference_id
     Then the response status should be 200
     And no user room mapping should be created

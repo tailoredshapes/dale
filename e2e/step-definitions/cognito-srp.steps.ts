@@ -23,7 +23,7 @@ function getCognitoClient(): CognitoIdentityProviderClient {
 Given<DaleWorld>('a temporary user exists for SRP testing', async function () {
   // Skip in local mode - Cognito SRP requires real AWS
   if (this.config.localMode) {
-    return this.skip();
+    return 'skipped';
   }
 
   const username = `e2e-srp-${Date.now()}@test.dale.dev`;
@@ -57,7 +57,7 @@ Given<DaleWorld>('a temporary user exists for SRP testing', async function () {
 When<DaleWorld>('the user authenticates via SRP', async function () {
   // Skip in local mode
   if (this.config.localMode) {
-    return this.skip();
+    return 'skipped';
   }
 
   assert.ok(this.cognitoUsername, 'No Cognito username set');
@@ -78,7 +78,7 @@ When<DaleWorld>('the user authenticates via SRP', async function () {
 Then<DaleWorld>('the SRP login should succeed with valid tokens', function () {
   // Skip in local mode
   if (this.config.localMode) {
-    return this.skip();
+    return 'skipped';
   }
 
   assert.ok(this.idToken, 'Missing idToken');

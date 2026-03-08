@@ -37,6 +37,32 @@ describe('getAccessToken', () => {
 });
 
 describe('registerPayPalWebhook', () => {
+  it('returns mock ID when SKIP_PAYPAL_REGISTRATION is set', async () => {
+    const originalSkip = process.env.SKIP_PAYPAL_REGISTRATION;
+    process.env.SKIP_PAYPAL_REGISTRATION = 'true';
+
+    try {
+      // fetch should NOT be called when skipping registration
+      global.fetch = vi.fn();
+
+      const id = await registerPayPalWebhook(
+        BASE_URL, 'client-id', 'client-secret',
+        'https://webhook.example.com?tenant=t1',
+        ['BILLING.SUBSCRIPTION.ACTIVATED'],
+      );
+
+      expect(id).toMatch(/^WH-mock-\d+$/);
+      expect(global.fetch).not.toHaveBeenCalled();
+    } finally {
+      // Restore original value
+      if (originalSkip === undefined) {
+        delete process.env.SKIP_PAYPAL_REGISTRATION;
+      } else {
+        process.env.SKIP_PAYPAL_REGISTRATION = originalSkip;
+      }
+    }
+  });
+
   it('gets token then registers webhook, returns ID', async () => {
     global.fetch = vi.fn()
       .mockResolvedValueOnce({

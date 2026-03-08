@@ -8,6 +8,7 @@ import type { APIGatewayProxyEventV2, APIGatewayProxyResultV2 } from 'aws-lambda
 
 // Set environment variables for local mode before importing handlers
 process.env.SKIP_PAYPAL_SIGNATURE_VERIFY = 'true';
+process.env.SKIP_PAYPAL_REGISTRATION = 'true';
 
 // Import handlers dynamically
 const { handler: adminHandler } = await import('../src/admin/api.js');

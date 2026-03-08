@@ -8,6 +8,10 @@ import assert from 'node:assert/strict';
 const TEST_STRIPE_SECRET_KEY = 'sk_test_e2e_fake';
 const TEST_STRIPE_WEBHOOK_SECRET = 'whsec_e2e_fake';
 
+// Test PayPal credentials for E2E tests
+const TEST_PAYPAL_CLIENT_ID = 'pp_test_client_id_e2e';
+const TEST_PAYPAL_CLIENT_SECRET = 'pp_test_client_secret_e2e';
+
 When<DaleWorld>('I onboard a new tenant with display name {string}', async function (displayName: string) {
   assert.ok(this.idToken, 'No auth token available');
   this.lastResponse = await apiRequest(`${this.config.adminApiUrl}/api/tenant/onboard`, 'POST', {
@@ -17,6 +21,8 @@ When<DaleWorld>('I onboard a new tenant with display name {string}', async funct
       telegramBotToken: '000000000:fake-bot-token-for-e2e',
       stripeSecretKey: TEST_STRIPE_SECRET_KEY,
       stripeWebhookSecret: TEST_STRIPE_WEBHOOK_SECRET,
+      paypalClientId: TEST_PAYPAL_CLIENT_ID,
+      paypalClientSecret: TEST_PAYPAL_CLIENT_SECRET,
     },
   });
 
@@ -40,6 +46,8 @@ Given<DaleWorld>('I have onboarded a tenant with display name {string}', async f
       telegramBotToken: '000000000:fake-bot-token-for-e2e',
       stripeSecretKey: TEST_STRIPE_SECRET_KEY,
       stripeWebhookSecret: TEST_STRIPE_WEBHOOK_SECRET,
+      paypalClientId: TEST_PAYPAL_CLIENT_ID,
+      paypalClientSecret: TEST_PAYPAL_CLIENT_SECRET,
     },
   });
 

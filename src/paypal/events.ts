@@ -1,5 +1,6 @@
 import { getTenantByPayPalPayer, createPayPalUserRoomMapping } from '../db/paypal-mappings.js';
-import { sendMessage } from '../telegram/api.js';
+import { listUserRooms, updateUserRoomStatus, getUserRoom } from '../db/users.js';
+import { sendMessage, banChatMember, unbanChatMember, createChatInviteLink } from '../telegram/api.js';
 import { getRoom } from '../db/rooms.js';
 
 export function parseCustomId(ref: string | null | undefined): {
@@ -42,22 +43,40 @@ export async function handleSubscriptionActivated(
     return;
   }
 
-  await createPayPalUserRoomMapping(
-    tenantId,
-    parsed.telegramUserId,
-    parsed.roomId,
-    paypalPayerId,
-    paypalSubscriptionId,
-  );
+  // Check if user already has a mapping for this room (reactivation case)
+  const existing = await getUserRoom(tenantId, parsed.telegramUserId, parsed.roomId);
+  if (existing) {
+    // Reactivation: update status to active
+    await updateUserRoomStatus(tenantId, parsed.telegramUserId, parsed.roomId, 'active');
+  } else {
+    // New subscription: create mapping
+    await createPayPalUserRoomMapping(
+      tenantId,
+      parsed.telegramUserId,
+      parsed.roomId,
+      paypalPayerId,
+      paypalSubscriptionId,
+    );
+  }
 
   const room = await getRoom(tenantId, parsed.roomId);
   const groupName = room?.name ?? 'your group';
 
-  await sendMessage(
-    botToken,
-    parsed.telegramUserId,
-    `You're in! \u{1F389} Your subscription to *${groupName}* is now active.`,
-  );
+  let inviteLink: string | null = null;
+  if (room?.telegram_group_id) {
+    // Unban user in case they were previously banned
+    await unbanChatMember(botToken, Number(room.telegram_group_id), parsed.telegramUserId);
+    inviteLink = await createChatInviteLink(botToken, Number(room.telegram_group_id));
+    if (!inviteLink) {
+      console.warn(`Failed to create invite link for room ${parsed.roomId}`);
+    }
+  }
+
+  const message = inviteLink
+    ? `You're in! \u{1F389} Your subscription to *${groupName}* is now active.\n\n👉 [Join the group](${inviteLink})`
+    : `You're in! \u{1F389} Your subscription to *${groupName}* is now active.`;
+
+  await sendMessage(botToken, parsed.telegramUserId, message);
 }
 
 export async function handleSubscriptionCancelled(
@@ -68,10 +87,25 @@ export async function handleSubscriptionCancelled(
   const resource = event.resource as Record<string, unknown>;
   const subscriber = resource.subscriber as Record<string, unknown> | undefined;
   const paypalPayerId = (subscriber?.payer_id as string) ?? '';
+  const paypalSubscriptionId = resource.id as string ?? '';
   if (!paypalPayerId) return;
 
   const mapping = await getTenantByPayPalPayer(paypalPayerId);
   if (!mapping || mapping.tenant_id !== tenantId) return;
+
+  const userRooms = await listUserRooms(tenantId, mapping.telegram_user_id);
+  const relevant = paypalSubscriptionId
+    ? userRooms.filter((ur) => ur.paypal_subscription_id === paypalSubscriptionId)
+    : userRooms;
+
+  for (const ur of relevant) {
+    await updateUserRoomStatus(tenantId, mapping.telegram_user_id, ur.room_id, 'cancelled');
+
+    const room = await getRoom(tenantId, ur.room_id);
+    if (room?.telegram_group_id) {
+      await banChatMember(botToken, Number(room.telegram_group_id), mapping.telegram_user_id);
+    }
+  }
 
   await sendMessage(
     botToken,
@@ -88,10 +122,20 @@ export async function handleSubscriptionSuspended(
   const resource = event.resource as Record<string, unknown>;
   const subscriber = resource.subscriber as Record<string, unknown> | undefined;
   const paypalPayerId = (subscriber?.payer_id as string) ?? '';
+  const paypalSubscriptionId = resource.id as string ?? '';
   if (!paypalPayerId) return;
 
   const mapping = await getTenantByPayPalPayer(paypalPayerId);
   if (!mapping || mapping.tenant_id !== tenantId) return;
+
+  const userRooms = await listUserRooms(tenantId, mapping.telegram_user_id);
+  const relevant = paypalSubscriptionId
+    ? userRooms.filter((ur) => ur.paypal_subscription_id === paypalSubscriptionId)
+    : userRooms;
+
+  for (const ur of relevant) {
+    await updateUserRoomStatus(tenantId, mapping.telegram_user_id, ur.room_id, 'past_due');
+  }
 
   await sendMessage(
     botToken,

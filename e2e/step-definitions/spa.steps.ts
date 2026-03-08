@@ -4,7 +4,7 @@ import { DaleWorld } from '../support/world.js';
 When<DaleWorld>('I request the SPA root', async function () {
   // Skip SPA tests in local mode - requires running web app dev server
   if (this.config.localMode) {
-    return this.skip();
+    return 'skipped';
   }
 
   const response = await fetch(this.config.webDistributionUrl);
@@ -18,7 +18,7 @@ When<DaleWorld>('I request the SPA root', async function () {
 When<DaleWorld>('I request the SPA path {string}', async function (path: string) {
   // Skip SPA tests in local mode - requires running web app dev server
   if (this.config.localMode) {
-    return this.skip();
+    return 'skipped';
   }
 
   const response = await fetch(`${this.config.webDistributionUrl}${path}`);
