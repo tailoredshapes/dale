@@ -48,28 +48,31 @@ e2e-local:
   needs:
     - test-backend
     - test-web
+  variables:
+    COMPOSE_PROJECT_NAME: dale-${CI_JOB_ID}
   before_script: []
   script:
-    # Start services
-    - docker ps -aq --filter name=dale | xargs -r docker rm -f 2>/dev/null || true
+    # Start services (isolated by COMPOSE_PROJECT_NAME)
     - docker compose down -v 2>/dev/null || true
     - docker compose up -d --build
 
     # Wait for setup to complete (blocks until container exits)
     - |
       echo "Waiting for setup container to finish..."
-      exit_code=$(docker wait dale-setup 2>/dev/null || docker wait dale-dale-setup-1 2>/dev/null || echo "1")
+      SETUP_CONTAINER="${COMPOSE_PROJECT_NAME}-setup-1"
+      exit_code=$(docker wait "$SETUP_CONTAINER" 2>/dev/null || echo "1")
       echo "Setup exited with code: $exit_code"
       if [ "$exit_code" != "0" ]; then
         docker compose logs setup || true
         exit 1
       fi
 
-    # Wait for API to be healthy
+    # Wait for API to be healthy (service name dale-api, container name is project-prefixed)
     - |
       echo "Waiting for dale-api to be healthy..."
+      API_CONTAINER="${COMPOSE_PROJECT_NAME}-dale-api-1"
       for i in $(seq 1 60); do
-        if docker exec dale-api curl -sf http://localhost:3000/health > /dev/null 2>&1; then
+        if docker exec "$API_CONTAINER" curl -sf http://localhost:3000/health > /dev/null 2>&1; then
           echo "dale-api is healthy"
           break
         fi
@@ -78,15 +81,16 @@ e2e-local:
       done
 
     # Run E2E tests inside a container on the same network
+    # Use Docker Compose service names for DNS (not container names)
     - |
       docker run --rm \
-        --network dale_default \
+        --network ${COMPOSE_PROJECT_NAME}_default \
         -v $(pwd)/e2e:/app/e2e \
         -w /app/e2e \
         -e E2E_LOCAL_MODE=true \
         -e E2E_LOCAL_HOST=dale-api \
-        -e DYNAMODB_ENDPOINT=http://dale-dynamodb:8000 \
-        -e SSM_ENDPOINT=http://dale-localstack:4566 \
+        -e DYNAMODB_ENDPOINT=http://dynamodb-local:8000 \
+        -e SSM_ENDPOINT=http://localstack:4566 \
         node:20-alpine \
         sh -c "npm ci && npx cucumber-js --tags 'not @real-telegram and not @cognito-srp and not @tutorial'"
   after_script:

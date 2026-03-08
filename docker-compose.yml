@@ -3,7 +3,6 @@ version: '3.8'
 services:
   dynamodb-local:
     image: amazon/dynamodb-local:latest
-    container_name: dale-dynamodb
     command: "-jar DynamoDBLocal.jar -sharedDb -dbPath /data"
     volumes:
       - dynamodb-data:/data
@@ -15,7 +14,6 @@ services:
 
   localstack:
     image: localstack/localstack:3.0
-    container_name: dale-localstack
     environment:
       - SERVICES=ssm
       - DEBUG=0
@@ -33,7 +31,6 @@ services:
     build:
       context: .
       dockerfile: local/Dockerfile
-    container_name: dale-api
     environment:
       - TABLE_NAME=dale-local
       - AWS_REGION=us-east-1
@@ -64,7 +61,6 @@ services:
     build:
       context: .
       dockerfile: local/Dockerfile
-    container_name: dale-setup
     command: ["npx", "tsx", "local/setup.ts"]
     environment:
       - TABLE_NAME=dale-local
