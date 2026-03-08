@@ -11,6 +11,7 @@ before_script:
 test-backend:
   stage: test
   script:
+    - docker run --rm -v "$(pwd)/e2e:/e2e" alpine sh -c "rm -rf /e2e/node_modules" 2>/dev/null || true
     - npm ci
     - npm test
   cache:
