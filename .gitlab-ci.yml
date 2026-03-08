@@ -51,6 +51,15 @@ e2e-local:
   needs:
     - test-backend
     - test-web
+  cache:
+    - key: "cargo-registry-v1"
+      paths: [~/.cargo/registry/, ~/.cargo/git/]
+      when: always
+    - key:
+        files: [backend/Cargo.lock]
+        prefix: "dale-backend"
+      paths: [backend/target/]
+      when: always
   variables:
     COMPOSE_PROJECT_NAME: dale-${CI_JOB_ID}
   before_script:
@@ -114,6 +123,15 @@ deploy-prod:
     - main
   needs:
     - e2e-local
+  cache:
+    - key: "cargo-registry-v1"
+      paths: [~/.cargo/registry/, ~/.cargo/git/]
+      policy: pull
+    - key:
+        files: [backend/Cargo.lock]
+        prefix: "dale-backend"
+      paths: [backend/target/]
+      policy: pull
   variables:
     AWS_ACCESS_KEY_ID: $AWS_ACCESS_KEY_ID
     AWS_SECRET_ACCESS_KEY: $AWS_SECRET_ACCESS_KEY
