@@ -5,22 +5,33 @@ export interface AuthContext {
   tenantId: string;
 }
 
+// In-memory mapping: cognitoSub → tenantId
+// Populated during onboarding so JWT-authed requests can resolve tenant
+const subToTenantId = new Map<string, string>();
+
+export function registerTenantForSub(cognitoSub: string, tenantId: string): void {
+  subToTenantId.set(cognitoSub, tenantId);
+}
+
 export async function extractAuthContext(
   event: APIGatewayProxyEventV2,
 ): Promise<AuthContext | null> {
-  // For simplicity, use X-Webhook-Secret header for auth
-  // In production, this would be Cognito JWT
+  // Option 1: X-Webhook-Secret header (Telegram/Stripe/PayPal callbacks)
   const secret = event.headers['x-webhook-secret'];
-  if (!secret) {
-    return null;
+  if (secret) {
+    const tenant = await getTenantByWebhookSecret(secret);
+    if (tenant) return { tenantId: tenant.id };
   }
 
-  const tenant = await getTenantByWebhookSecret(secret);
-  if (!tenant) {
-    return null;
+  // Option 2: Cognito JWT Bearer token (admin UI / E2E tests)
+  const claims = (event.requestContext as any)?.authorizer?.jwt?.claims;
+  const sub = claims?.sub as string | undefined;
+  if (sub) {
+    const tenantId = subToTenantId.get(sub);
+    if (tenantId) return { tenantId };
   }
 
-  return { tenantId: tenant.id };
+  return null;
 }
 
 export function extractCognitoSub(event: APIGatewayProxyEventV2): string | null {

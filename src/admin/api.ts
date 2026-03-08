@@ -1,6 +1,6 @@
 import type { APIGatewayProxyEventV2, APIGatewayProxyResultV2 } from 'aws-lambda';
 import { getPlatformConfig } from '../shared/config.js';
-import { extractAuthContext, extractCognitoSub } from './middleware/auth.js';
+import { extractAuthContext, extractCognitoSub, registerTenantForSub } from './middleware/auth.js';
 import { handleGetTenant, handleUpdateTenant, handleOnboard, handleConfigurePayment } from './routes/tenant.js';
 import { handleListRooms, handleGetRoom, handleCreateRoom, handleUpdateRoom } from './routes/rooms.js';
 import { handleListSubscribers } from './routes/subscribers.js';
@@ -42,18 +42,22 @@ export async function handler(
     if (!cognitoSub) {
       return json({ statusCode: 401, body: JSON.stringify({ error: 'Unauthorized' }) });
     }
-    return json(
-      await handleOnboard(cognitoSub, event.body ?? '', {
-        generateId: () => ulid(),
-        generateSecret: () => randomBytes(32).toString('hex'),
-        setWebhook,
-        registerPayPalWebhook,
-        telegramWebhookUrl: config.telegramWebhookUrl,
-        stripeWebhookUrl: config.stripeWebhookUrl,
-        paypalWebhookUrl: config.paypalWebhookUrl,
-        paypalBaseUrl: config.paypalBaseUrl,
-      }),
-    );
+    const onboardResult = await handleOnboard(cognitoSub, event.body ?? '', {
+      generateId: () => ulid(),
+      generateSecret: () => randomBytes(32).toString('hex'),
+      setWebhook,
+      registerPayPalWebhook,
+      telegramWebhookUrl: config.telegramWebhookUrl,
+      stripeWebhookUrl: config.stripeWebhookUrl,
+      paypalWebhookUrl: config.paypalWebhookUrl,
+      paypalBaseUrl: config.paypalBaseUrl,
+    });
+    // Register sub→tenantId so JWT-authed requests resolve the tenant
+    if (onboardResult.statusCode === 201) {
+      const body = JSON.parse(onboardResult.body);
+      if (body.tenantId) registerTenantForSub(cognitoSub, body.tenantId);
+    }
+    return json(onboardResult);
   }
 
   // All other routes require existing tenant
