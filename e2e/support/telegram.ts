@@ -81,8 +81,12 @@ export async function sendTelegramWebhook(
   url: string,
   secret: string,
   payload: TelegramUpdate,
+  tenantId?: string,
 ): Promise<{ status: number; body: string }> {
-  const response = await fetch(url, {
+  // Include tenant parameter in URL (consistent with Stripe/PayPal webhooks)
+  const webhookUrl = tenantId ? `${url}?tenant=${tenantId}` : url;
+
+  const response = await fetch(webhookUrl, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',

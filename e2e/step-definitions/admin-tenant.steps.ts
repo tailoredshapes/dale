@@ -4,6 +4,10 @@ import { apiRequest } from '../support/http.js';
 import { cacheTenantSecrets } from '../support/ssm.js';
 import assert from 'node:assert/strict';
 
+// Test Stripe credentials for E2E tests
+const TEST_STRIPE_SECRET_KEY = 'sk_test_e2e_fake';
+const TEST_STRIPE_WEBHOOK_SECRET = 'whsec_e2e_fake';
+
 When<DaleWorld>('I onboard a new tenant with display name {string}', async function (displayName: string) {
   assert.ok(this.idToken, 'No auth token available');
   this.lastResponse = await apiRequest(`${this.config.adminApiUrl}/api/tenant/onboard`, 'POST', {
@@ -11,6 +15,8 @@ When<DaleWorld>('I onboard a new tenant with display name {string}', async funct
     body: {
       displayName,
       telegramBotToken: '000000000:fake-bot-token-for-e2e',
+      stripeSecretKey: TEST_STRIPE_SECRET_KEY,
+      stripeWebhookSecret: TEST_STRIPE_WEBHOOK_SECRET,
     },
   });
 
@@ -32,6 +38,8 @@ Given<DaleWorld>('I have onboarded a tenant with display name {string}', async f
     body: {
       displayName,
       telegramBotToken: '000000000:fake-bot-token-for-e2e',
+      stripeSecretKey: TEST_STRIPE_SECRET_KEY,
+      stripeWebhookSecret: TEST_STRIPE_WEBHOOK_SECRET,
     },
   });
 

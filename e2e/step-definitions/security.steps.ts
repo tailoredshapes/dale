@@ -55,6 +55,10 @@ function createExpiredToken(): string {
 
 // ============== Given Steps ==============
 
+// Test Stripe credentials for E2E tests
+const TEST_STRIPE_SECRET_KEY = 'sk_test_e2e_fake';
+const TEST_STRIPE_WEBHOOK_SECRET = 'whsec_e2e_fake';
+
 Given<DaleWorld>(
   'I have onboarding a tenant with display name {string}',
   async function (displayName: string) {
@@ -66,6 +70,8 @@ Given<DaleWorld>(
       body: {
         displayName,
         telegramBotToken: '000000000:fake-bot-token-for-e2e',
+        stripeSecretKey: TEST_STRIPE_SECRET_KEY,
+        stripeWebhookSecret: TEST_STRIPE_WEBHOOK_SECRET,
       },
     });
 
@@ -115,7 +121,9 @@ When<DaleWorld>(
 When<DaleWorld>(
   'I send a POST to the Telegram webhook without a secret header',
   async function () {
-    const response = await fetch(this.config.telegramWebhookUrl, {
+    // Use a valid tenant ID to test secret validation specifically
+    const tenantId = this.tenantIds.length > 0 ? this.tenantIds[0] : 'test-tenant';
+    const response = await fetch(`${this.config.telegramWebhookUrl}?tenant=${tenantId}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ update_id: 1 }),

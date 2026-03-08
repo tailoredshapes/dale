@@ -15,6 +15,8 @@ Given<DaleWorld>('I have retrieved the webhook secret', async function () {
 
 When<DaleWorld>('I simulate the bot being added to group {string}', async function (groupTitle: string) {
   assert.ok(this.webhookSecret, 'No webhook secret available');
+  assert.ok(this.tenantIds.length > 0, 'No tenant onboarded');
+  const tenantId = this.tenantIds[this.tenantIds.length - 1];
   this.telegramGroupId = -(Math.floor(Math.random() * 900000000) + 100000000);
   const payload = buildBotAddedToGroup({
     groupId: this.telegramGroupId,
@@ -24,6 +26,7 @@ When<DaleWorld>('I simulate the bot being added to group {string}', async functi
     this.config.telegramWebhookUrl,
     this.webhookSecret,
     payload,
+    tenantId,
   );
   this.lastResponse = { status: result.status, body: result.body, headers: new Headers() };
 });
@@ -33,6 +36,8 @@ Given<DaleWorld>(
   async function (groupTitle: string) {
     assert.ok(this.webhookSecret, 'No webhook secret available');
     assert.ok(this.idToken, 'No auth token available');
+    assert.ok(this.tenantIds.length > 0, 'No tenant onboarded');
+    const tenantId = this.tenantIds[this.tenantIds.length - 1];
     this.telegramGroupId = -(Math.floor(Math.random() * 900000000) + 100000000);
     const payload = buildBotAddedToGroup({
       groupId: this.telegramGroupId,
@@ -42,6 +47,7 @@ Given<DaleWorld>(
       this.config.telegramWebhookUrl,
       this.webhookSecret,
       payload,
+      tenantId,
     );
     // Wait for async processing
     await new Promise((r) => setTimeout(r, 1000));
@@ -84,6 +90,8 @@ Given<DaleWorld>(
 When<DaleWorld>('a user sends {string} in the group', async function (text: string) {
   assert.ok(this.webhookSecret, 'No webhook secret available');
   assert.ok(this.telegramGroupId, 'No telegram group ID available');
+  assert.ok(this.tenantIds.length > 0, 'No tenant onboarded');
+  const tenantId = this.tenantIds[this.tenantIds.length - 1];
   const payload = buildMessage({
     chatId: this.telegramGroupId,
     chatType: 'supergroup',
@@ -93,12 +101,15 @@ When<DaleWorld>('a user sends {string} in the group', async function (text: stri
     this.config.telegramWebhookUrl,
     this.webhookSecret,
     payload,
+    tenantId,
   );
   this.lastResponse = { status: result.status, body: result.body, headers: new Headers() };
 });
 
 When<DaleWorld>('a user sends {string} as a direct message', async function (text: string) {
   assert.ok(this.webhookSecret, 'No webhook secret available');
+  assert.ok(this.tenantIds.length > 0, 'No tenant onboarded');
+  const tenantId = this.tenantIds[this.tenantIds.length - 1];
   const payload = buildMessage({
     chatId: 111111,
     chatType: 'private',
@@ -108,6 +119,7 @@ When<DaleWorld>('a user sends {string} as a direct message', async function (tex
     this.config.telegramWebhookUrl,
     this.webhookSecret,
     payload,
+    tenantId,
   );
   this.lastResponse = { status: result.status, body: result.body, headers: new Headers() };
 });

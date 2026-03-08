@@ -13,6 +13,8 @@ When<DaleWorld>(
   async function (userId: number, text: string) {
     assert.ok(this.webhookSecret, 'No webhook secret available');
     assert.ok(this.telegramGroupId, 'No telegram group ID available');
+    assert.ok(this.tenantIds.length > 0, 'No tenant onboarded');
+    const tenantId = this.tenantIds[this.tenantIds.length - 1];
 
     const payload = buildMessage({
       chatId: this.telegramGroupId,
@@ -25,6 +27,7 @@ When<DaleWorld>(
       this.config.telegramWebhookUrl,
       this.webhookSecret,
       payload,
+      tenantId,
     );
 
     this.lastResponse = {
@@ -42,6 +45,8 @@ When<DaleWorld>(
   'user {int} sends {string} as a direct message',
   async function (userId: number, text: string) {
     assert.ok(this.webhookSecret, 'No webhook secret available');
+    assert.ok(this.tenantIds.length > 0, 'No tenant onboarded');
+    const tenantId = this.tenantIds[this.tenantIds.length - 1];
 
     const payload = buildMessage({
       chatId: userId, // For DMs, chatId is the user's ID
@@ -54,6 +59,7 @@ When<DaleWorld>(
       this.config.telegramWebhookUrl,
       this.webhookSecret,
       payload,
+      tenantId,
     );
 
     this.lastResponse = {
@@ -72,6 +78,8 @@ When<DaleWorld>(
 When<DaleWorld>('a regular text message is sent in the group', async function () {
   assert.ok(this.webhookSecret, 'No webhook secret available');
   assert.ok(this.telegramGroupId, 'No telegram group ID available');
+  assert.ok(this.tenantIds.length > 0, 'No tenant onboarded');
+  const tenantId = this.tenantIds[this.tenantIds.length - 1];
 
   const payload = buildMessage({
     chatId: this.telegramGroupId,
@@ -84,6 +92,7 @@ When<DaleWorld>('a regular text message is sent in the group', async function ()
     this.config.telegramWebhookUrl,
     this.webhookSecret,
     payload,
+    tenantId,
   );
 
   this.lastResponse = {

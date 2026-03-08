@@ -6,6 +6,9 @@ import { createServer, IncomingMessage, ServerResponse } from 'http';
 import { URL } from 'url';
 import type { APIGatewayProxyEventV2, APIGatewayProxyResultV2 } from 'aws-lambda';
 
+// Set environment variables for local mode before importing handlers
+process.env.SKIP_PAYPAL_SIGNATURE_VERIFY = 'true';
+
 // Import handlers dynamically
 const { handler: adminHandler } = await import('../src/admin/api.js');
 const { handler: telegramHandler } = await import('../src/telegram/webhook.js');

@@ -9,15 +9,27 @@ import {
 import { DaleWorld } from '../support/world.js';
 import { srpAuthenticate } from '../support/srp-auth.js';
 
-// Use region from environment with fallback to us-east-1
-const region = process.env.AWS_REGION ?? process.env.E2E_REGION ?? 'us-east-1';
-const cognitoClient = new CognitoIdentityProviderClient({ region });
+// Lazy-initialize Cognito client to avoid CredentialsProviderError when env not set
+let cognitoClient: CognitoIdentityProviderClient | null = null;
+
+function getCognitoClient(): CognitoIdentityProviderClient {
+  if (!cognitoClient) {
+    const region = process.env.AWS_REGION ?? process.env.E2E_REGION ?? 'us-east-1';
+    cognitoClient = new CognitoIdentityProviderClient({ region });
+  }
+  return cognitoClient;
+}
 
 Given<DaleWorld>('a temporary user exists for SRP testing', async function () {
+  // Skip in local mode - Cognito SRP requires real AWS
+  if (this.config.localMode) {
+    return this.skip();
+  }
+
   const username = `e2e-srp-${Date.now()}@test.dale.dev`;
   const password = `SrpTest!${Date.now()}`;
 
-  await cognitoClient.send(
+  await getCognitoClient().send(
     new AdminCreateUserCommand({
       UserPoolId: this.config.userPoolId,
       Username: username,
@@ -29,7 +41,7 @@ Given<DaleWorld>('a temporary user exists for SRP testing', async function () {
     }),
   );
 
-  await cognitoClient.send(
+  await getCognitoClient().send(
     new AdminSetUserPasswordCommand({
       UserPoolId: this.config.userPoolId,
       Username: username,
@@ -43,6 +55,11 @@ Given<DaleWorld>('a temporary user exists for SRP testing', async function () {
 });
 
 When<DaleWorld>('the user authenticates via SRP', async function () {
+  // Skip in local mode
+  if (this.config.localMode) {
+    return this.skip();
+  }
+
   assert.ok(this.cognitoUsername, 'No Cognito username set');
   assert.ok(this.srpPassword, 'No SRP password set');
 
@@ -59,6 +76,11 @@ When<DaleWorld>('the user authenticates via SRP', async function () {
 });
 
 Then<DaleWorld>('the SRP login should succeed with valid tokens', function () {
+  // Skip in local mode
+  if (this.config.localMode) {
+    return this.skip();
+  }
+
   assert.ok(this.idToken, 'Missing idToken');
   assert.ok(this.accessToken, 'Missing accessToken');
   assert.ok(this.refreshToken, 'Missing refreshToken');

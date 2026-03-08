@@ -1,5 +1,4 @@
 import type { APIGatewayProxyEventV2, APIGatewayProxyResultV2 } from 'aws-lambda';
-import { getTenantIdByWebhookSecret } from '../shared/tenant-lookup.js';
 import { getTenantSecrets } from '../shared/tenant-config.js';
 import { getUserRoom, listUserRooms } from '../db/users.js';
 import { listRoomsForTenant, getRoomByTelegramGroupId } from '../db/rooms.js';
@@ -12,26 +11,31 @@ export async function handler(
   event: APIGatewayProxyEventV2,
 ): Promise<APIGatewayProxyResultV2> {
   try {
-    // Step 1: Extract webhook secret from header
-    const secret = event.headers['x-telegram-bot-api-secret-token'];
-    if (!secret) {
-      return { statusCode: 200, body: 'ok' };
+    // Step 1: Extract tenant from query string (consistent with Stripe/PayPal webhooks)
+    const tenantId = event.queryStringParameters?.tenant;
+    if (!tenantId) {
+      return { statusCode: 400, body: 'Missing tenant parameter' };
     }
 
-    // Step 2: Look up tenant by webhook secret
-    const tenantId = await getTenantIdByWebhookSecret(secret);
-    if (!tenantId) {
-      console.warn('Unknown webhook secret');
-      return { statusCode: 200, body: 'ok' };
+    // Step 2: Extract webhook secret from header
+    const secret = event.headers['x-telegram-bot-api-secret-token'];
+    if (!secret) {
+      return { statusCode: 401, body: 'Missing webhook secret' };
     }
 
     // Step 3: Load tenant secrets
-    const tenantSecrets = await getTenantSecrets(tenantId);
+    let tenantSecrets;
+    try {
+      tenantSecrets = await getTenantSecrets(tenantId);
+    } catch (err) {
+      console.error(`Failed to load secrets for tenant ${tenantId}:`, err);
+      return { statusCode: 500, body: 'Tenant configuration error' };
+    }
 
-    // Step 4: Validate the webhook secret matches tenant's expected secret
+    // Step 4: Validate the webhook secret matches the specified tenant's secret
     if (!validateTelegramSecret(secret, tenantSecrets.telegramWebhookSecret)) {
       console.warn('Webhook secret mismatch for tenant', tenantId);
-      return { statusCode: 200, body: 'ok' };
+      return { statusCode: 401, body: 'Invalid webhook secret' };
     }
 
     // Step 5: Parse the update

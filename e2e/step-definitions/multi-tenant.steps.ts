@@ -17,6 +17,10 @@ import assert from 'node:assert/strict';
 
 // ============== Given Steps ==============
 
+// Test Stripe credentials for E2E tests
+const TEST_STRIPE_SECRET_KEY = 'sk_test_e2e_fake';
+const TEST_STRIPE_WEBHOOK_SECRET = 'whsec_e2e_fake';
+
 Given<DaleWorld>(
   'I have onboarded a second tenant with display name {string}',
   async function (displayName: string) {
@@ -32,6 +36,8 @@ Given<DaleWorld>(
         body: {
           displayName,
           telegramBotToken: '111111111:second-tenant-bot-token-for-e2e',
+          stripeSecretKey: TEST_STRIPE_SECRET_KEY,
+          stripeWebhookSecret: TEST_STRIPE_WEBHOOK_SECRET,
         },
       },
     );
@@ -182,8 +188,9 @@ When<DaleWorld>(
   "I send a Telegram update signed with Tenant A's secret to Tenant B's endpoint",
   async function () {
     assert.ok(this.tenantAWebhookSecret, 'No Tenant A webhook secret available');
+    assert.ok(this.secondTenantId, 'No second tenant available');
 
-    // Try to send a Telegram update with Tenant A's secret
+    // Try to send a Telegram update with Tenant A's secret to Tenant B's endpoint
     // This should fail because the secret doesn't match Tenant B
     const payload = buildMessage({
       chatId: 12345,
@@ -193,8 +200,9 @@ When<DaleWorld>(
 
     const result = await sendTelegramWebhook(
       this.config.telegramWebhookUrl,
-      this.tenantAWebhookSecret, // Wrong secret for the endpoint
+      this.tenantAWebhookSecret, // Wrong secret for Tenant B's endpoint
       payload,
+      this.secondTenantId, // Tenant B's endpoint
     );
 
     this.lastResponse = {
