@@ -55,17 +55,15 @@ e2e-local:
     - docker compose down -v 2>/dev/null || true
     - docker compose up -d --build
 
-    # Wait for setup to complete
+    # Wait for setup to complete (blocks until container exits)
     - |
-      echo "Waiting for setup to complete..."
-      for i in $(seq 1 30); do
-        if docker compose ps setup | grep -qE "Exit 0|exited.*\(0\)|Exited"; then
-          echo "Setup completed successfully"
-          break
-        fi
-        echo "Attempt $i/30 - waiting for setup..."
-        sleep 2
-      done
+      echo "Waiting for setup container to finish..."
+      exit_code=$(docker wait dale-setup 2>/dev/null || docker wait dale-dale-setup-1 2>/dev/null || echo "1")
+      echo "Setup exited with code: $exit_code"
+      if [ "$exit_code" != "0" ]; then
+        docker compose logs setup || true
+        exit 1
+      fi
 
     # Wait for API to be healthy
     - |
