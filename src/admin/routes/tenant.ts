@@ -2,25 +2,22 @@ import { getTenantById, createTenant, updateTenant } from '../../db/tenants.js';
 import type { AuthContext } from '../middleware/auth.js';
 
 export async function handleGetTenant(
-  tableName: string,
   auth: AuthContext,
 ): Promise<{ statusCode: number; body: string }> {
-  const tenant = await getTenantById(tableName, auth.tenantId);
+  const tenant = await getTenantById(auth.tenantId);
   if (!tenant) {
     return { statusCode: 404, body: JSON.stringify({ error: 'Tenant not found' }) };
   }
   return {
     statusCode: 200,
     body: JSON.stringify({
-      tenantId: tenant.tenantId,
-      displayName: tenant.displayName,
-      createdAt: tenant.createdAt,
+      tenantId: tenant.id,
+      displayName: tenant.display_name,
     }),
   };
 }
 
 export async function handleUpdateTenant(
-  tableName: string,
   auth: AuthContext,
   body: string,
 ): Promise<{ statusCode: number; body: string }> {
@@ -31,7 +28,7 @@ export async function handleUpdateTenant(
     return { statusCode: 400, body: JSON.stringify({ error: 'Invalid JSON' }) };
   }
 
-  await updateTenant(tableName, auth.tenantId, { displayName: parsed.displayName });
+  await updateTenant(auth.tenantId, { display_name: parsed.displayName });
   return { statusCode: 200, body: JSON.stringify({ updated: true }) };
 }
 
@@ -44,14 +41,10 @@ const PAYPAL_WEBHOOK_EVENT_TYPES = [
 ];
 
 export async function handleOnboard(
-  tableName: string,
   cognitoSub: string,
   body: string,
   deps: {
-    generateId: () => string;
     generateSecret: () => string;
-    storeSecrets: (tenantId: string, secrets: Record<string, string>) => Promise<void>;
-    createWebhookSecretMapping: (tableName: string, secret: string, tenantId: string) => Promise<void>;
     setWebhook: (botToken: string, webhookUrl: string, secretToken: string) => Promise<boolean>;
     registerPayPalWebhook: (baseUrl: string, clientId: string, clientSecret: string, webhookUrl: string, eventTypes: string[]) => Promise<string>;
     telegramWebhookUrl: string;
@@ -81,51 +74,38 @@ export async function handleOnboard(
   const hasStripe = !!(parsed.stripeSecretKey && parsed.stripeWebhookSecret);
   const hasPayPal = !!(parsed.paypalClientId && parsed.paypalClientSecret);
 
-  const tenantId = deps.generateId();
   const webhookSecret = deps.generateSecret();
 
-  // Register PayPal webhook if needed
-  let paypalWebhookId: string | undefined;
+  // Create tenant first to get the meshql-rs generated ID
+  const createdTenant = await createTenant({
+    display_name: parsed.displayName,
+    telegram_bot_token: parsed.telegramBotToken,
+    webhook_secret: webhookSecret,
+    stripe_secret_key: hasStripe ? parsed.stripeSecretKey : undefined,
+    stripe_webhook_secret: hasStripe ? parsed.stripeWebhookSecret : undefined,
+    paypal_client_id: hasPayPal ? parsed.paypalClientId : undefined,
+    paypal_client_secret: hasPayPal ? parsed.paypalClientSecret : undefined,
+  });
+  const tenantId = createdTenant.id;
+
+  // Register PayPal webhook after tenant creation (need real tenantId for webhook URL)
   if (hasPayPal) {
     try {
       const webhookUrl = `${deps.paypalWebhookUrl}?tenant=${tenantId}`;
-      paypalWebhookId = await deps.registerPayPalWebhook(
+      const paypalWebhookId = await deps.registerPayPalWebhook(
         deps.paypalBaseUrl,
         parsed.paypalClientId!,
         parsed.paypalClientSecret!,
         webhookUrl,
         PAYPAL_WEBHOOK_EVENT_TYPES,
       );
+      // Update tenant with the PayPal webhook ID
+      await updateTenant(tenantId, { paypal_webhook_id: paypalWebhookId });
     } catch (err) {
       console.error('PayPal webhook registration failed:', err);
       return { statusCode: 502, body: JSON.stringify({ error: 'PayPal webhook registration failed' }) };
     }
   }
-
-  // Store secrets in SSM
-  const secrets: Record<string, string> = {
-    'telegram-bot-token': parsed.telegramBotToken,
-    'telegram-webhook-secret': webhookSecret,
-  };
-  if (hasStripe) {
-    secrets['stripe-secret-key'] = parsed.stripeSecretKey!;
-    secrets['stripe-webhook-secret'] = parsed.stripeWebhookSecret!;
-  }
-  if (hasPayPal) {
-    secrets['paypal-client-id'] = parsed.paypalClientId!;
-    secrets['paypal-client-secret'] = parsed.paypalClientSecret!;
-    secrets['paypal-webhook-id'] = paypalWebhookId!;
-  }
-  await deps.storeSecrets(tenantId, secrets);
-
-  // Write tenant + webhook secret records
-  await createTenant(tableName, {
-    tenantId,
-    cognitoSub,
-    displayName: parsed.displayName,
-  });
-
-  await deps.createWebhookSecretMapping(tableName, webhookSecret, tenantId);
 
   // Register Telegram webhook
   const webhookRegistered = await deps.setWebhook(
@@ -136,10 +116,12 @@ export async function handleOnboard(
 
   const response: Record<string, unknown> = {
     tenantId,
+    webhookSecret,
     webhookRegistered,
   };
   if (hasStripe) {
     response.stripeWebhookUrl = `${deps.stripeWebhookUrl}?tenant=${tenantId}`;
+    response.stripeWebhookSecret = parsed.stripeWebhookSecret;
   }
   if (hasPayPal) {
     response.paypalWebhookUrl = `${deps.paypalWebhookUrl}?tenant=${tenantId}`;
@@ -155,7 +137,6 @@ export async function handleConfigurePayment(
   auth: AuthContext,
   body: string,
   deps: {
-    storeSecrets: (tenantId: string, secrets: Record<string, string>) => Promise<void>;
     registerPayPalWebhook: (baseUrl: string, clientId: string, clientSecret: string, webhookUrl: string, eventTypes: string[]) => Promise<string>;
     stripeWebhookUrl: string;
     paypalWebhookUrl: string;
@@ -189,12 +170,12 @@ export async function handleConfigurePayment(
     return { statusCode: 400, body: JSON.stringify({ error: 'Both paypalClientId and paypalClientSecret are required' }) };
   }
 
-  const secrets: Record<string, string> = {};
+  const updates: Record<string, string | undefined> = {};
   const response: Record<string, unknown> = { configured: true };
 
   if (hasStripe) {
-    secrets['stripe-secret-key'] = parsed.stripeSecretKey!;
-    secrets['stripe-webhook-secret'] = parsed.stripeWebhookSecret!;
+    updates.stripe_secret_key = parsed.stripeSecretKey;
+    updates.stripe_webhook_secret = parsed.stripeWebhookSecret;
     response.stripeWebhookUrl = `${deps.stripeWebhookUrl}?tenant=${auth.tenantId}`;
   }
 
@@ -208,9 +189,9 @@ export async function handleConfigurePayment(
         webhookUrl,
         PAYPAL_WEBHOOK_EVENT_TYPES,
       );
-      secrets['paypal-client-id'] = parsed.paypalClientId!;
-      secrets['paypal-client-secret'] = parsed.paypalClientSecret!;
-      secrets['paypal-webhook-id'] = paypalWebhookId;
+      updates.paypal_client_id = parsed.paypalClientId;
+      updates.paypal_client_secret = parsed.paypalClientSecret;
+      updates.paypal_webhook_id = paypalWebhookId;
       response.paypalWebhookUrl = webhookUrl;
     } catch (err) {
       console.error('PayPal webhook registration failed:', err);
@@ -218,7 +199,7 @@ export async function handleConfigurePayment(
     }
   }
 
-  await deps.storeSecrets(auth.tenantId, secrets);
+  await updateTenant(auth.tenantId, updates);
 
   return {
     statusCode: 200,

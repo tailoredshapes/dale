@@ -104,7 +104,6 @@ describe('Stripe webhook handler', () => {
     const result = await handler(makeEvent('{}'));
     expect(result.statusCode).toBe(200);
     expect(mockedHandleCheckout).toHaveBeenCalledWith(
-      'dale-test-table',
       'tenant-1',
       '123:ABC',
       session,

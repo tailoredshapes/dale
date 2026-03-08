@@ -1,9 +1,7 @@
 import type { TelegramChatMemberUpdated } from '../shared/types.js';
 import { createRoom } from '../db/rooms.js';
-import { ulid } from 'ulid';
 
 export interface GroupHandlerContext {
-  tableName: string;
   tenantId: string;
   botUserId: number;
 }
@@ -23,13 +21,13 @@ export async function handleMyChatMember(
     // Bot was added to a group — auto-create a room record
     console.log(`Bot added to group ${chatId} (${chatTitle}) for tenant ${ctx.tenantId}`);
     try {
-      await createRoom(ctx.tableName, {
-        tenantId: ctx.tenantId,
-        roomId: ulid(),
+      // Let meshql-rs restlette generate the ID
+      await createRoom({
+        tenant_id: ctx.tenantId,
         name: chatTitle,
-        telegramGroupId: chatId,
-        paymentLink: '',
-        isActive: false, // Tenant must configure payment link before activating
+        telegram_group_id: String(chatId),
+        payment_link: '',
+        active: false, // Tenant must configure payment link before activating
       });
     } catch (err) {
       console.error(`Failed to create room for group ${chatId}:`, err);

@@ -56,7 +56,6 @@ export async function handler(
     switch (stripeEvent.type) {
       case 'checkout.session.completed':
         await handleCheckoutCompleted(
-          config.tableName,
           tenantId,
           tenantSecrets.telegramBotToken,
           stripeEvent.data.object as Stripe.Checkout.Session,
@@ -64,7 +63,6 @@ export async function handler(
         break;
       case 'invoice.paid':
         await handleInvoicePaid(
-          config.tableName,
           tenantId,
           tenantSecrets.telegramBotToken,
           stripeEvent.data.object as Stripe.Invoice,
@@ -72,7 +70,6 @@ export async function handler(
         break;
       case 'invoice.payment_failed':
         await handleInvoicePaymentFailed(
-          config.tableName,
           tenantId,
           tenantSecrets.telegramBotToken,
           stripeEvent.data.object as Stripe.Invoice,
@@ -80,7 +77,6 @@ export async function handler(
         break;
       case 'customer.subscription.deleted':
         await handleSubscriptionDeleted(
-          config.tableName,
           tenantId,
           tenantSecrets.telegramBotToken,
           stripeEvent.data.object as Stripe.Subscription,
@@ -88,7 +84,6 @@ export async function handler(
         break;
       case 'customer.subscription.updated':
         await handleSubscriptionUpdated(
-          config.tableName,
           tenantId,
           tenantSecrets.telegramBotToken,
           stripeEvent.data.object as Stripe.Subscription,

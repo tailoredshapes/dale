@@ -35,8 +35,6 @@ const mockedGetRoom = vi.mocked(getRoom);
 const mockedBanChatMember = vi.mocked(banChatMember);
 const mockedSendMessage = vi.mocked(sendMessage);
 
-const TABLE = 'dale-test-table';
-
 beforeEach(() => {
   vi.clearAllMocks();
 });
@@ -45,43 +43,28 @@ describe('Subscription lifecycle: customer.subscription.deleted', () => {
   it('revokes user in DynamoDB AND removes them from the Telegram group', async () => {
     // Arrange: user has an active subscription linked to a room with a Telegram group
     mockedGetMapping.mockResolvedValue({
-      pk: 'TENANT#tenant-1',
-      sk: 'STRIPECUST#cus_abc',
-      tenantId: 'tenant-1',
-      stripeCustomerId: 'cus_abc',
-      telegramUserId: 42,
-      createdAt: '',
-      GSI1pk: 'STRIPECUST#cus_abc',
-      GSI1sk: 'TENANT#tenant-1',
+      tenant_id: 'tenant-1',
+      telegram_user_id: 42,
     });
 
     mockedListUserRooms.mockResolvedValue([
       {
-        pk: 'TENANT#tenant-1',
-        sk: 'USERROOM#42#ROOM#room-1',
-        tenantId: 'tenant-1',
-        telegramUserId: 42,
-        roomId: 'room-1',
-        subscriptionStatus: 'active',
-        stripeSubscriptionId: 'sub_xyz',
-        createdAt: '',
-        updatedAt: '',
-        GSI1pk: 'TGUSER#42',
-        GSI1sk: 'TENANT#tenant-1#ROOM#room-1',
+        id: 'ur-1',
+        tenant_id: 'tenant-1',
+        telegram_user_id: 42,
+        room_id: 'room-1',
+        subscription_status: 'active',
+        stripe_subscription_id: 'sub_xyz',
       },
     ]);
 
     mockedGetRoom.mockResolvedValue({
-      pk: 'TENANT#tenant-1',
-      sk: 'ROOM#room-1',
-      tenantId: 'tenant-1',
-      roomId: 'room-1',
+      id: 'room-1',
+      tenant_id: 'tenant-1',
       name: 'Premium Club',
-      telegramGroupId: -1001234567890,
-      paymentLink: 'https://buy.stripe.com/test',
-      isActive: true,
-      createdAt: '',
-      updatedAt: '',
+      telegram_group_id: '-1001234567890',
+      payment_link: 'https://buy.stripe.com/test',
+      active: true,
     });
 
     mockedBanChatMember.mockResolvedValue(true);
@@ -92,11 +75,11 @@ describe('Subscription lifecycle: customer.subscription.deleted', () => {
     } as Stripe.Subscription;
 
     // Act
-    await handleSubscriptionDeleted(TABLE, 'tenant-1', 'bot-token-123', subscription);
+    await handleSubscriptionDeleted('tenant-1', 'bot-token-123', subscription);
 
     // Assert: DynamoDB status is revoked to 'cancelled'
     expect(mockedUpdateStatus).toHaveBeenCalledWith(
-      TABLE, 'tenant-1', 42, 'room-1', 'cancelled',
+      'tenant-1', 42, 'room-1', 'cancelled',
     );
 
     // Assert: Telegram API is called to ban (remove) user from the group
@@ -114,80 +97,56 @@ describe('Subscription lifecycle: customer.subscription.deleted', () => {
 
   it('revokes across multiple rooms when user has several subscriptions', async () => {
     mockedGetMapping.mockResolvedValue({
-      pk: 'TENANT#tenant-1',
-      sk: 'STRIPECUST#cus_abc',
-      tenantId: 'tenant-1',
-      stripeCustomerId: 'cus_abc',
-      telegramUserId: 42,
-      createdAt: '',
-      GSI1pk: 'STRIPECUST#cus_abc',
-      GSI1sk: 'TENANT#tenant-1',
+      tenant_id: 'tenant-1',
+      telegram_user_id: 42,
     });
 
     mockedListUserRooms.mockResolvedValue([
       {
-        pk: 'TENANT#tenant-1',
-        sk: 'USERROOM#42#ROOM#room-1',
-        tenantId: 'tenant-1',
-        telegramUserId: 42,
-        roomId: 'room-1',
-        subscriptionStatus: 'active',
-        stripeSubscriptionId: 'sub_xyz',
-        createdAt: '',
-        updatedAt: '',
-        GSI1pk: 'TGUSER#42',
-        GSI1sk: 'TENANT#tenant-1#ROOM#room-1',
+        id: 'ur-1',
+        tenant_id: 'tenant-1',
+        telegram_user_id: 42,
+        room_id: 'room-1',
+        subscription_status: 'active',
+        stripe_subscription_id: 'sub_xyz',
       },
       {
-        pk: 'TENANT#tenant-1',
-        sk: 'USERROOM#42#ROOM#room-2',
-        tenantId: 'tenant-1',
-        telegramUserId: 42,
-        roomId: 'room-2',
-        subscriptionStatus: 'active',
-        stripeSubscriptionId: 'sub_xyz',
-        createdAt: '',
-        updatedAt: '',
-        GSI1pk: 'TGUSER#42',
-        GSI1sk: 'TENANT#tenant-1#ROOM#room-2',
+        id: 'ur-2',
+        tenant_id: 'tenant-1',
+        telegram_user_id: 42,
+        room_id: 'room-2',
+        subscription_status: 'active',
+        stripe_subscription_id: 'sub_xyz',
       },
     ]);
 
     mockedGetRoom
       .mockResolvedValueOnce({
-        pk: 'TENANT#tenant-1',
-        sk: 'ROOM#room-1',
-        tenantId: 'tenant-1',
-        roomId: 'room-1',
+        id: 'room-1',
+        tenant_id: 'tenant-1',
         name: 'Room 1',
-        telegramGroupId: -100111,
-        paymentLink: '',
-        isActive: true,
-        createdAt: '',
-        updatedAt: '',
+        telegram_group_id: '-100111',
+        payment_link: '',
+        active: true,
       })
       .mockResolvedValueOnce({
-        pk: 'TENANT#tenant-1',
-        sk: 'ROOM#room-2',
-        tenantId: 'tenant-1',
-        roomId: 'room-2',
+        id: 'room-2',
+        tenant_id: 'tenant-1',
         name: 'Room 2',
-        telegramGroupId: -100222,
-        paymentLink: '',
-        isActive: true,
-        createdAt: '',
-        updatedAt: '',
+        telegram_group_id: '-100222',
+        payment_link: '',
+        active: true,
       });
 
     mockedBanChatMember.mockResolvedValue(true);
 
     const subscription = { customer: 'cus_abc', id: 'sub_xyz' } as Stripe.Subscription;
-    await handleSubscriptionDeleted(TABLE, 'tenant-1', 'bot-token', subscription);
+    await handleSubscriptionDeleted('tenant-1', 'bot-token', subscription);
 
     // Both rooms should be revoked
     expect(mockedUpdateStatus).toHaveBeenCalledTimes(2);
-    expect(mockedUpdateStatus).toHaveBeenCalledWith(TABLE, 'tenant-1', 42, 'room-1', 'cancelled');
-    expect(mockedUpdateStatus).toHaveBeenCalledWith(TABLE, 'tenant-1', 42, 'room-2', 'cancelled');
+    expect(mockedUpdateStatus).toHaveBeenCalledWith('tenant-1', 42, 'room-1', 'cancelled');
+    expect(mockedUpdateStatus).toHaveBeenCalledWith('tenant-1', 42, 'room-2', 'cancelled');
 
     // Both groups should have the user banned
     expect(mockedBanChatMember).toHaveBeenCalledTimes(2);
@@ -199,7 +158,7 @@ describe('Subscription lifecycle: customer.subscription.deleted', () => {
     mockedGetMapping.mockResolvedValue(null);
 
     const subscription = { customer: 'cus_unknown', id: 'sub_xyz' } as Stripe.Subscription;
-    await handleSubscriptionDeleted(TABLE, 'tenant-1', 'bot-token', subscription);
+    await handleSubscriptionDeleted('tenant-1', 'bot-token', subscription);
 
     expect(mockedUpdateStatus).not.toHaveBeenCalled();
     expect(mockedBanChatMember).not.toHaveBeenCalled();

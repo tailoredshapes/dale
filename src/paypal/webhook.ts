@@ -55,7 +55,6 @@ export async function handler(
     switch (eventType) {
       case 'BILLING.SUBSCRIPTION.ACTIVATED':
         await handleSubscriptionActivated(
-          config.tableName,
           tenantId,
           tenantSecrets.telegramBotToken,
           paypalEvent,
@@ -63,7 +62,6 @@ export async function handler(
         break;
       case 'BILLING.SUBSCRIPTION.CANCELLED':
         await handleSubscriptionCancelled(
-          config.tableName,
           tenantId,
           tenantSecrets.telegramBotToken,
           paypalEvent,
@@ -71,7 +69,6 @@ export async function handler(
         break;
       case 'BILLING.SUBSCRIPTION.SUSPENDED':
         await handleSubscriptionSuspended(
-          config.tableName,
           tenantId,
           tenantSecrets.telegramBotToken,
           paypalEvent,
@@ -79,14 +76,12 @@ export async function handler(
         break;
       case 'PAYMENT.SALE.COMPLETED':
         await handlePaymentCompleted(
-          config.tableName,
           tenantId,
           paypalEvent,
         );
         break;
       case 'PAYMENT.SALE.DENIED':
         await handlePaymentDenied(
-          config.tableName,
           tenantId,
           tenantSecrets.telegramBotToken,
           paypalEvent,

@@ -1,9 +1,11 @@
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
-import { Database } from './constructs/database.js';
+import { MeshqlStorage } from './constructs/meshql-storage.js';
 import { Webhooks } from './constructs/webhooks.js';
+import { BlueGreenWebhooks } from './constructs/blue-green-webhooks.js';
 import { AdminApi } from './constructs/admin-api.js';
 import { WebHosting } from './constructs/web-hosting.js';
+import { FrontendHosting } from './constructs/frontend-hosting.js';
 import { AutoShutdown } from './constructs/auto-shutdown.js';
 
 export interface DaleStackProps extends cdk.StackProps {
@@ -11,28 +13,45 @@ export interface DaleStackProps extends cdk.StackProps {
   retainData: boolean;
   telegramTestMode?: boolean;
   paypalBaseUrl?: string;
+  blueGreenDeployment?: boolean;
 }
 
 export class DaleStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props: DaleStackProps) {
     super(scope, id, props);
 
-    const ssmParamArns = [
-      `arn:aws:ssm:${this.region}:${this.account}:parameter/dale/*`,
-    ];
-
-    // Database
-    const database = new Database(this, 'Database', {
+    // MeshQL Storage (EFS + meshql-rs Lambda)
+    const storage = new MeshqlStorage(this, 'MeshqlStorage', {
       retainData: props.retainData,
+      envName: props.envName,
     });
 
-    // Webhook Lambdas
-    const webhooks = new Webhooks(this, 'Webhooks', {
-      table: database.table,
-      ssmParamArns,
-      telegramTestMode: props.telegramTestMode,
-      paypalBaseUrl: props.paypalBaseUrl,
-    });
+    // Webhook URLs (set differently based on deployment type)
+    let telegramWebhookUrl: string;
+    let stripeWebhookUrl: string;
+    let paypalWebhookUrl: string;
+
+    // Webhook Lambdas - use blue/green for prod, function URLs for dev
+    if (props.blueGreenDeployment) {
+      const blueGreenWebhooks = new BlueGreenWebhooks(this, 'BlueGreenWebhooks', {
+        meshqlUrl: storage.meshqlUrl,
+        telegramTestMode: props.telegramTestMode,
+        paypalBaseUrl: props.paypalBaseUrl,
+        envName: props.envName,
+      });
+      telegramWebhookUrl = blueGreenWebhooks.telegramUrl;
+      stripeWebhookUrl = blueGreenWebhooks.stripeUrl;
+      paypalWebhookUrl = blueGreenWebhooks.paypalUrl;
+    } else {
+      const webhooks = new Webhooks(this, 'Webhooks', {
+        meshqlUrl: storage.meshqlUrl,
+        telegramTestMode: props.telegramTestMode,
+        paypalBaseUrl: props.paypalBaseUrl,
+      });
+      telegramWebhookUrl = webhooks.telegramUrl.url;
+      stripeWebhookUrl = webhooks.stripeUrl.url;
+      paypalWebhookUrl = webhooks.paypalUrl.url;
+    }
 
     // Web Hosting (S3 + CloudFront) — before AdminApi so CloudFront domain is available
     // Set DOMAIN_NAME + CERTIFICATE_ARN env vars to enable a custom domain (e.g. dalegram.com).
@@ -48,12 +67,11 @@ export class DaleStack extends cdk.Stack {
 
     // Admin API (Cognito + API Gateway + Lambda)
     const adminApi = new AdminApi(this, 'AdminApi', {
-      table: database.table,
-      ssmParamArns,
+      meshqlUrl: storage.meshqlUrl,
       telegramTestMode: props.telegramTestMode,
-      telegramWebhookUrl: webhooks.telegramUrl.url,
-      stripeWebhookUrl: webhooks.stripeUrl.url,
-      paypalWebhookUrl: webhooks.paypalUrl.url,
+      telegramWebhookUrl,
+      stripeWebhookUrl,
+      paypalWebhookUrl,
       paypalBaseUrl: props.paypalBaseUrl,
       envName: props.envName,
       googleClientId: process.env.GOOGLE_CLIENT_ID,
@@ -77,15 +95,15 @@ export class DaleStack extends cdk.Stack {
 
     // Outputs
     new cdk.CfnOutput(this, 'TelegramWebhookUrl', {
-      value: webhooks.telegramUrl.url,
+      value: telegramWebhookUrl,
     });
 
     new cdk.CfnOutput(this, 'StripeWebhookUrl', {
-      value: webhooks.stripeUrl.url,
+      value: stripeWebhookUrl,
     });
 
     new cdk.CfnOutput(this, 'PayPalWebhookUrl', {
-      value: webhooks.paypalUrl.url,
+      value: paypalWebhookUrl,
     });
 
     new cdk.CfnOutput(this, 'AdminApiUrl', {
@@ -125,8 +143,64 @@ export class DaleStack extends cdk.Stack {
       value: webHosting.distribution.distributionId,
     });
 
-    new cdk.CfnOutput(this, 'TableName', {
-      value: database.table.tableName,
+    new cdk.CfnOutput(this, 'MeshqlUrl', {
+      value: storage.meshqlUrl,
+    });
+
+    // Frontend Hosting (Consumer, Creator, Admin apps)
+    const frontendHosting = new FrontendHosting(this, 'FrontendHosting', {
+      envName: props.envName,
+      apps: [
+        {
+          name: 'consumer',
+          domainName: process.env.CONSUMER_DOMAIN,
+        },
+        {
+          name: 'creator',
+          domainName: process.env.CREATOR_DOMAIN,
+        },
+        {
+          name: 'admin',
+          domainName: process.env.ADMIN_DOMAIN,
+        },
+      ],
+      certificateArn: process.env.CERTIFICATE_ARN,
+    });
+
+    // Consumer app outputs
+    const consumerDeployment = frontendHosting.deployments.get('consumer')!;
+    new cdk.CfnOutput(this, 'ConsumerBucketName', {
+      value: consumerDeployment.bucket.bucketName,
+    });
+    new cdk.CfnOutput(this, 'ConsumerDistributionId', {
+      value: consumerDeployment.distribution.distributionId,
+    });
+    new cdk.CfnOutput(this, 'ConsumerSiteUrl', {
+      value: consumerDeployment.siteUrl,
+    });
+
+    // Creator app outputs
+    const creatorDeployment = frontendHosting.deployments.get('creator')!;
+    new cdk.CfnOutput(this, 'CreatorBucketName', {
+      value: creatorDeployment.bucket.bucketName,
+    });
+    new cdk.CfnOutput(this, 'CreatorDistributionId', {
+      value: creatorDeployment.distribution.distributionId,
+    });
+    new cdk.CfnOutput(this, 'CreatorSiteUrl', {
+      value: creatorDeployment.siteUrl,
+    });
+
+    // Admin app outputs
+    const adminDeployment = frontendHosting.deployments.get('admin')!;
+    new cdk.CfnOutput(this, 'AdminBucketName', {
+      value: adminDeployment.bucket.bucketName,
+    });
+    new cdk.CfnOutput(this, 'AdminDistributionId', {
+      value: adminDeployment.distribution.distributionId,
+    });
+    new cdk.CfnOutput(this, 'AdminSiteUrl', {
+      value: adminDeployment.siteUrl,
     });
   }
 }

@@ -11,6 +11,11 @@ export async function verifyPayPalWebhook(
   body: string,
   tenantSecrets: TenantSecrets,
 ): Promise<boolean> {
+  // Skip verification in local/E2E mode
+  if (process.env.SKIP_PAYPAL_SIGNATURE_VERIFY === 'true') {
+    return true;
+  }
+
   if (!tenantSecrets.paypalClientId || !tenantSecrets.paypalClientSecret || !tenantSecrets.paypalWebhookId) {
     return false;
   }

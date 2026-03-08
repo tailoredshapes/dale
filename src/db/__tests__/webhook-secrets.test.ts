@@ -1,43 +1,48 @@
-import { describe, it, expect, beforeEach } from 'vitest';
-import { mockClient } from 'aws-sdk-client-mock';
-import { GetCommand, PutCommand } from '@aws-sdk/lib-dynamodb';
-import { docClient } from '../client.js';
-import { createWebhookSecretMapping, getTenantByWebhookSecret } from '../webhook-secrets.js';
+import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
+import { getTenantIdByWebhookSecret } from '../webhook-secrets.js';
+import { MESHQL_URL } from '../client.js';
 
-const ddbMock = mockClient(docClient);
-const TABLE = 'dale-test-table';
+const mockFetch = vi.fn();
+vi.stubGlobal('fetch', mockFetch);
 
 beforeEach(() => {
-  ddbMock.reset();
+  mockFetch.mockReset();
 });
 
-describe('createWebhookSecretMapping', () => {
-  it('writes webhook secret record', async () => {
-    ddbMock.on(PutCommand).resolves({});
-
-    await createWebhookSecretMapping(TABLE, 'secret-123', 'tenant-1');
-
-    const call = ddbMock.commandCalls(PutCommand)[0];
-    const item = call.args[0].input.Item!;
-    expect(item.pk).toBe('WHSECRET#secret-123');
-    expect(item.sk).toBe('TENANT');
-    expect(item.tenantId).toBe('tenant-1');
-  });
+afterEach(() => {
+  vi.restoreAllMocks();
 });
 
-describe('getTenantByWebhookSecret', () => {
+describe('getTenantIdByWebhookSecret', () => {
   it('returns tenantId when found', async () => {
-    ddbMock.on(GetCommand).resolves({
-      Item: { pk: 'WHSECRET#secret-123', sk: 'TENANT', tenantId: 'tenant-1' },
+    const tenant = {
+      id: 'tenant-1',
+      display_name: 'Test',
+      webhook_secret: 'secret-123',
+    };
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ data: { getByWebhookSecret: tenant } }),
     });
 
-    const result = await getTenantByWebhookSecret(TABLE, 'secret-123');
+    const result = await getTenantIdByWebhookSecret('secret-123');
     expect(result).toBe('tenant-1');
+
+    expect(mockFetch).toHaveBeenCalledWith(
+      `${MESHQL_URL}/tenant/graph`,
+      expect.objectContaining({
+        method: 'POST',
+      }),
+    );
   });
 
   it('returns null when not found', async () => {
-    ddbMock.on(GetCommand).resolves({});
-    const result = await getTenantByWebhookSecret(TABLE, 'unknown');
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ data: { getByWebhookSecret: null } }),
+    });
+
+    const result = await getTenantIdByWebhookSecret('unknown');
     expect(result).toBeNull();
   });
 });

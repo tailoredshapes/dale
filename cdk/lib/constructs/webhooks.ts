@@ -1,8 +1,6 @@
 import * as cdk from 'aws-cdk-lib';
 import * as lambda from 'aws-cdk-lib/aws-lambda-nodejs';
-import * as iam from 'aws-cdk-lib/aws-iam';
-import { Runtime, FunctionUrlAuthType } from 'aws-cdk-lib/aws-lambda';
-import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
+import { Runtime, FunctionUrlAuthType, Architecture } from 'aws-cdk-lib/aws-lambda';
 import { Construct } from 'constructs';
 import * as path from 'path';
 import { fileURLToPath } from 'url';
@@ -10,8 +8,7 @@ import { fileURLToPath } from 'url';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 export interface WebhooksProps {
-  table: dynamodb.Table;
-  ssmParamArns: string[];
+  meshqlUrl: string;
   telegramTestMode?: boolean;
   paypalBaseUrl?: string;
 }
@@ -25,7 +22,7 @@ export class Webhooks extends Construct {
     super(scope, id);
 
     const commonEnv = {
-      TABLE_NAME: props.table.tableName,
+      MESHQL_URL: props.meshqlUrl,
       ...(props.telegramTestMode ? { TELEGRAM_TEST_MODE: 'true' } : {}),
     };
 
@@ -37,6 +34,7 @@ export class Webhooks extends Construct {
 
     const telegramHandler = new lambda.NodejsFunction(this, 'TelegramHandler', {
       runtime: Runtime.NODEJS_20_X,
+      architecture: Architecture.ARM_64,
       entry: path.join(__dirname, '../../../src/telegram/webhook.ts'),
       handler: 'handler',
       environment: commonEnv,
@@ -49,6 +47,7 @@ export class Webhooks extends Construct {
 
     const stripeHandler = new lambda.NodejsFunction(this, 'StripeHandler', {
       runtime: Runtime.NODEJS_20_X,
+      architecture: Architecture.ARM_64,
       entry: path.join(__dirname, '../../../src/stripe/webhook.ts'),
       handler: 'handler',
       environment: commonEnv,
@@ -62,6 +61,7 @@ export class Webhooks extends Construct {
 
     const paypalHandler = new lambda.NodejsFunction(this, 'PayPalHandler', {
       runtime: Runtime.NODEJS_20_X,
+      architecture: Architecture.ARM_64,
       entry: path.join(__dirname, '../../../src/paypal/webhook.ts'),
       handler: 'handler',
       environment: {
@@ -71,18 +71,6 @@ export class Webhooks extends Construct {
       bundling,
       timeout: cdk.Duration.seconds(15),
     });
-
-    props.table.grantReadWriteData(telegramHandler);
-    props.table.grantReadWriteData(stripeHandler);
-    props.table.grantReadWriteData(paypalHandler);
-
-    const ssmPolicy = new iam.PolicyStatement({
-      actions: ['ssm:GetParameter', 'ssm:GetParametersByPath'],
-      resources: props.ssmParamArns,
-    });
-    telegramHandler.addToRolePolicy(ssmPolicy);
-    stripeHandler.addToRolePolicy(ssmPolicy);
-    paypalHandler.addToRolePolicy(ssmPolicy);
 
     this.telegramUrl = telegramHandler.addFunctionUrl({
       authType: FunctionUrlAuthType.NONE,

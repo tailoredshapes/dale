@@ -1,95 +1,46 @@
 export type SubscriptionStatus = 'active' | 'past_due' | 'cancelled' | 'none';
 
-// --- Multi-tenant entities ---
+// --- Multi-tenant entities (meshql-rs backed) ---
 
 export interface Tenant {
-  pk: string; // TENANT#{tenantId}
-  sk: string; // METADATA
-  tenantId: string;
-  cognitoSub: string;
-  displayName: string;
-  createdAt: string;
-  updatedAt: string;
-  GSI1pk: string; // COGNITO#{cognitoSub}
-  GSI1sk: string; // TENANT
+  id: string;
+  display_name: string;
+  telegram_bot_token?: string;
+  webhook_secret?: string;
+  stripe_secret_key?: string;
+  stripe_webhook_secret?: string;
+  paypal_client_id?: string;
+  paypal_client_secret?: string;
+  paypal_webhook_id?: string;
 }
 
 export interface Room {
-  pk: string; // TENANT#{tenantId}
-  sk: string; // ROOM#{roomId}
-  tenantId: string;
-  roomId: string;
+  id: string;
+  tenant_id: string;
   name: string;
   description?: string;
-  telegramGroupId?: number;
-  paymentLink: string;
-  paypalPaymentLink?: string;
-  priceDescription?: string;
-  isActive: boolean;
-  createdAt: string;
-  updatedAt: string;
-  GSI1pk?: string; // TGGROUP#{telegramGroupId}
-  GSI1sk?: string; // ROOM
-}
-
-export interface WebhookSecretMapping {
-  pk: string; // WHSECRET#{secret}
-  sk: string; // TENANT
-  tenantId: string;
-  createdAt: string;
-}
-
-export interface UserProfile {
-  pk: string; // TENANT#{tenantId}
-  sk: string; // USER#{telegramUserId}
-  tenantId: string;
-  telegramUserId: number;
-  firstName?: string;
-  username?: string;
-  createdAt: string;
-  updatedAt: string;
+  telegram_group_id?: string;
+  payment_link?: string;
+  paypal_payment_link?: string;
+  price_description?: string;
+  active: boolean;
 }
 
 export interface UserRoom {
-  pk: string; // TENANT#{tenantId}
-  sk: string; // USERROOM#{telegramUserId}#ROOM#{roomId}
-  tenantId: string;
-  telegramUserId: number;
-  roomId: string;
-  subscriptionStatus: SubscriptionStatus;
-  stripeCustomerId?: string;
-  stripeSubscriptionId?: string;
-  paypalPayerId?: string;
-  paypalSubscriptionId?: string;
-  createdAt: string;
-  updatedAt: string;
-  GSI1pk: string; // TGUSER#{telegramUserId}
-  GSI1sk: string; // TENANT#{tenantId}#ROOM#{roomId}
+  id: string;
+  tenant_id: string;
+  room_id: string;
+  telegram_user_id: number;
+  telegram_first_name?: string;
+  telegram_username?: string;
+  stripe_customer_id?: string;
+  stripe_subscription_id?: string;
+  paypal_payer_id?: string;
+  paypal_subscription_id?: string;
+  subscription_status: SubscriptionStatus;
 }
 
-export interface StripeMapping {
-  pk: string; // TENANT#{tenantId}
-  sk: string; // STRIPECUST#{stripeCustomerId}
-  tenantId: string;
-  stripeCustomerId: string;
-  telegramUserId: number;
-  createdAt: string;
-  GSI1pk: string; // STRIPECUST#{stripeCustomerId}
-  GSI1sk: string; // TENANT#{tenantId}
-}
-
-export interface PayPalMapping {
-  pk: string; // TENANT#{tenantId}
-  sk: string; // PAYPALCUST#{paypalPayerId}
-  tenantId: string;
-  paypalPayerId: string;
-  telegramUserId: number;
-  createdAt: string;
-  GSI1pk: string; // PAYPALCUST#{paypalPayerId}
-  GSI1sk: string; // TENANT#{tenantId}
-}
-
-// --- Tenant secrets (from SSM) ---
+// --- Tenant secrets (now on Tenant object) ---
 
 export interface TenantSecrets {
   telegramBotToken: string;
@@ -104,7 +55,7 @@ export interface TenantSecrets {
 // --- Platform config (env vars only) ---
 
 export interface PlatformConfig {
-  tableName: string;
+  meshqlUrl: string;
   telegramWebhookUrl: string;
   stripeWebhookUrl: string;
   paypalWebhookUrl: string;

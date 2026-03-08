@@ -3,10 +3,9 @@ import * as cognito from 'aws-cdk-lib/aws-cognito';
 import * as apigwv2 from 'aws-cdk-lib/aws-apigatewayv2';
 import * as lambda from 'aws-cdk-lib/aws-lambda-nodejs';
 import * as iam from 'aws-cdk-lib/aws-iam';
-import { Runtime } from 'aws-cdk-lib/aws-lambda';
+import { Runtime, Architecture } from 'aws-cdk-lib/aws-lambda';
 import { HttpLambdaIntegration } from 'aws-cdk-lib/aws-apigatewayv2-integrations';
 import { HttpJwtAuthorizer } from 'aws-cdk-lib/aws-apigatewayv2-authorizers';
-import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
 import { Construct } from 'constructs';
 import * as path from 'path';
 import { fileURLToPath } from 'url';
@@ -14,8 +13,7 @@ import { fileURLToPath } from 'url';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 export interface AdminApiProps {
-  table: dynamodb.Table;
-  ssmParamArns: string[];
+  meshqlUrl: string;
   telegramWebhookUrl: string;
   stripeWebhookUrl: string;
   paypalWebhookUrl: string;
@@ -114,10 +112,11 @@ export class AdminApi extends Construct {
     // Admin Lambda
     const adminHandler = new lambda.NodejsFunction(this, 'AdminHandler', {
       runtime: Runtime.NODEJS_20_X,
+      architecture: Architecture.ARM_64,
       entry: path.join(__dirname, '../../../src/admin/api.ts'),
       handler: 'handler',
       environment: {
-        TABLE_NAME: props.table.tableName,
+        MESHQL_URL: props.meshqlUrl,
         TELEGRAM_WEBHOOK_URL: props.telegramWebhookUrl,
         STRIPE_WEBHOOK_URL: props.stripeWebhookUrl,
         PAYPAL_WEBHOOK_URL: props.paypalWebhookUrl,
@@ -133,14 +132,6 @@ export class AdminApi extends Construct {
       },
       timeout: cdk.Duration.seconds(15),
     });
-
-    props.table.grantReadWriteData(adminHandler);
-
-    const ssmPolicy = new iam.PolicyStatement({
-      actions: ['ssm:GetParameter', 'ssm:GetParametersByPath', 'ssm:PutParameter'],
-      resources: props.ssmParamArns,
-    });
-    adminHandler.addToRolePolicy(ssmPolicy);
 
     const cognitoPolicy = new iam.PolicyStatement({
       actions: ['cognito-idp:AdminCreateUser', 'cognito-idp:ListUsers'],

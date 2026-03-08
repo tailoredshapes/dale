@@ -45,45 +45,30 @@ const BASE_TENANT = 'tenant-1';
 
 function makeMapping(customerId: string, userId: number) {
   return {
-    pk: `TENANT#${BASE_TENANT}`,
-    sk: `STRIPECUST#${customerId}`,
-    tenantId: BASE_TENANT,
-    stripeCustomerId: customerId,
-    telegramUserId: userId,
-    createdAt: '',
-    GSI1pk: `STRIPECUST#${customerId}`,
-    GSI1sk: `TENANT#${BASE_TENANT}`,
+    tenant_id: BASE_TENANT,
+    telegram_user_id: userId,
   };
 }
 
 function makeUserRoom(userId: number, roomId: string, subId: string, status: string) {
   return {
-    pk: `TENANT#${BASE_TENANT}`,
-    sk: `USERROOM#${userId}#ROOM#${roomId}`,
-    tenantId: BASE_TENANT,
-    telegramUserId: userId,
-    roomId,
-    subscriptionStatus: status as any,
-    stripeSubscriptionId: subId,
-    createdAt: '',
-    updatedAt: '',
-    GSI1pk: `TGUSER#${userId}`,
-    GSI1sk: `TENANT#${BASE_TENANT}#ROOM#${roomId}`,
+    id: `ur_${userId}_${roomId}`,
+    tenant_id: BASE_TENANT,
+    room_id: roomId,
+    telegram_user_id: userId,
+    subscription_status: status as any,
+    stripe_subscription_id: subId,
   };
 }
 
 function makeRoom(tenantId: string, roomId: string, name: string, telegramGroupId?: number) {
   return {
-    pk: `TENANT#${tenantId}`,
-    sk: `ROOM#${roomId}`,
-    tenantId,
-    roomId,
+    id: roomId,
+    tenant_id: tenantId,
     name,
-    telegramGroupId,
-    paymentLink: 'https://buy.stripe.com/test',
-    isActive: true,
-    createdAt: '',
-    updatedAt: '',
+    telegram_group_id: telegramGroupId ? String(telegramGroupId) : undefined,
+    payment_link: 'https://buy.stripe.com/test',
+    active: true,
   };
 }
 
@@ -195,7 +180,6 @@ Given('the invite link creation fails',
 
 When('the checkout is completed', async (state: DaleWorld) => {
   await handleCheckoutCompleted(
-    state.tableName,
     state.tenantId,
     state.botToken,
     state.session as Stripe.Checkout.Session,
@@ -206,7 +190,6 @@ When('subscription {string} is deleted for customer {string}',
   async (state: DaleWorld, subId: string, customerId: string) => {
     state.subscription = { customer: customerId, id: subId, status: 'canceled' as any };
     await handleSubscriptionDeleted(
-      state.tableName,
       state.tenantId,
       state.botToken,
       state.subscription as Stripe.Subscription,
@@ -217,7 +200,6 @@ When('invoice is paid for customer {string} subscription {string}',
   async (state: DaleWorld, customerId: string, subId: string) => {
     state.invoice = { customer: customerId, subscription: subId };
     await handleInvoicePaid(
-      state.tableName,
       state.tenantId,
       state.botToken,
       state.invoice as Stripe.Invoice,
@@ -228,7 +210,6 @@ When('subscription {string} status changes to {string} for customer {string}',
   async (state: DaleWorld, subId: string, status: string, customerId: string) => {
     state.subscription = { customer: customerId, id: subId, status: status as any };
     await handleSubscriptionUpdated(
-      state.tableName,
       state.tenantId,
       state.botToken,
       state.subscription as Stripe.Subscription,
@@ -273,7 +254,6 @@ Then('no mapping is created', (_state: any) => {
 Then("the user's subscription status is updated to {string}",
   (state: DaleWorld, status: string) => {
     expect(vi.mocked(updateUserRoomStatus)).toHaveBeenCalledWith(
-      state.tableName,
       state.tenantId,
       expect.any(Number),
       expect.any(String),

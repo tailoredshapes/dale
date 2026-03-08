@@ -44,31 +44,18 @@ const mockedListUserRooms = vi.mocked(listUserRooms);
 const mockedUpdateStatus = vi.mocked(updateUserRoomStatus);
 const mockedGetRoom = vi.mocked(getRoom);
 
-const TABLE = 'dale-test-table';
-
 const baseMapping = {
-  pk: 'TENANT#tenant-1',
-  sk: 'STRIPECUST#cus_abc',
-  tenantId: 'tenant-1',
-  stripeCustomerId: 'cus_abc',
-  telegramUserId: 123,
-  createdAt: '',
-  GSI1pk: 'STRIPECUST#cus_abc',
-  GSI1sk: 'TENANT#tenant-1',
+  tenant_id: 'tenant-1',
+  telegram_user_id: 123,
 };
 
 const baseUserRoom = {
-  pk: 'TENANT#tenant-1',
-  sk: 'USERROOM#123#ROOM#room-1',
-  tenantId: 'tenant-1',
-  telegramUserId: 123,
-  roomId: 'room-1',
-  subscriptionStatus: 'active' as const,
-  stripeSubscriptionId: 'sub_xyz',
-  createdAt: '',
-  updatedAt: '',
-  GSI1pk: 'TGUSER#123',
-  GSI1sk: 'TENANT#tenant-1#ROOM#room-1',
+  id: 'ur-1',
+  tenant_id: 'tenant-1',
+  telegram_user_id: 123,
+  room_id: 'room-1',
+  subscription_status: 'active' as const,
+  stripe_subscription_id: 'sub_xyz',
 };
 
 beforeEach(() => {
@@ -84,10 +71,10 @@ describe('handleCheckoutCompleted', () => {
       subscription: 'sub_xyz',
     } as Stripe.Checkout.Session;
 
-    await handleCheckoutCompleted(TABLE, 'tenant-1', 'bot-token', session);
+    await handleCheckoutCompleted('tenant-1', 'bot-token', session);
 
     expect(mockedCreateMapping).toHaveBeenCalledWith(
-      TABLE, 'tenant-1', 123, 'room-1', 'cus_abc', 'sub_xyz',
+      'tenant-1', 123, 'room-1', 'cus_abc', 'sub_xyz',
     );
     expect(mockedSendMessage).toHaveBeenCalledWith(
       'bot-token',
@@ -98,16 +85,12 @@ describe('handleCheckoutCompleted', () => {
 
   it('creates invite link and includes it in message when room has telegramGroupId', async () => {
     mockedGetRoom.mockResolvedValue({
-      pk: 'TENANT#tenant-1',
-      sk: 'ROOM#room-1',
-      tenantId: 'tenant-1',
-      roomId: 'room-1',
+      id: 'room-1',
+      tenant_id: 'tenant-1',
       name: 'Cool Club',
-      telegramGroupId: -1001234567890,
-      paymentLink: 'https://buy.stripe.com/test',
-      isActive: true,
-      createdAt: '',
-      updatedAt: '',
+      telegram_group_id: '-1001234567890',
+      payment_link: 'https://buy.stripe.com/test',
+      active: true,
     });
     mockedCreateInviteLink.mockResolvedValue('https://t.me/+abc123');
 
@@ -117,7 +100,7 @@ describe('handleCheckoutCompleted', () => {
       subscription: 'sub_xyz',
     } as Stripe.Checkout.Session;
 
-    await handleCheckoutCompleted(TABLE, 'tenant-1', 'bot-token', session);
+    await handleCheckoutCompleted('tenant-1', 'bot-token', session);
 
     expect(mockedCreateInviteLink).toHaveBeenCalledWith('bot-token', -1001234567890);
     expect(mockedSendMessage).toHaveBeenCalledWith(
@@ -129,16 +112,12 @@ describe('handleCheckoutCompleted', () => {
 
   it('sends message without invite link if createChatInviteLink fails', async () => {
     mockedGetRoom.mockResolvedValue({
-      pk: 'TENANT#tenant-1',
-      sk: 'ROOM#room-1',
-      tenantId: 'tenant-1',
-      roomId: 'room-1',
+      id: 'room-1',
+      tenant_id: 'tenant-1',
       name: 'Cool Club',
-      telegramGroupId: -1001234567890,
-      paymentLink: 'https://buy.stripe.com/test',
-      isActive: true,
-      createdAt: '',
-      updatedAt: '',
+      telegram_group_id: '-1001234567890',
+      payment_link: 'https://buy.stripe.com/test',
+      active: true,
     });
     mockedCreateInviteLink.mockResolvedValue(null);
 
@@ -148,7 +127,7 @@ describe('handleCheckoutCompleted', () => {
       subscription: 'sub_xyz',
     } as Stripe.Checkout.Session;
 
-    await handleCheckoutCompleted(TABLE, 'tenant-1', 'bot-token', session);
+    await handleCheckoutCompleted('tenant-1', 'bot-token', session);
 
     expect(mockedSendMessage).toHaveBeenCalledWith(
       'bot-token',
@@ -166,7 +145,7 @@ describe('handleCheckoutCompleted', () => {
       subscription: 'sub_xyz',
     } as Stripe.Checkout.Session;
 
-    await handleCheckoutCompleted(TABLE, 'tenant-1', 'bot-token', session);
+    await handleCheckoutCompleted('tenant-1', 'bot-token', session);
     expect(mockedCreateMapping).not.toHaveBeenCalled();
   });
 
@@ -177,7 +156,7 @@ describe('handleCheckoutCompleted', () => {
       subscription: 'sub_xyz',
     } as Stripe.Checkout.Session;
 
-    await handleCheckoutCompleted(TABLE, 'tenant-1', 'bot-token', session);
+    await handleCheckoutCompleted('tenant-1', 'bot-token', session);
     expect(mockedCreateMapping).not.toHaveBeenCalled();
   });
 });
@@ -187,7 +166,7 @@ describe('handleInvoicePaymentFailed', () => {
     mockedGetMapping.mockResolvedValue(baseMapping);
     const invoice = { customer: 'cus_abc' } as Stripe.Invoice;
 
-    await handleInvoicePaymentFailed(TABLE, 'tenant-1', 'bot-token', invoice);
+    await handleInvoicePaymentFailed('tenant-1', 'bot-token', invoice);
 
     expect(mockedSendMessage).toHaveBeenCalledWith(
       'bot-token',
@@ -200,7 +179,7 @@ describe('handleInvoicePaymentFailed', () => {
     mockedGetMapping.mockResolvedValue(null);
     const invoice = { customer: 'cus_unknown' } as Stripe.Invoice;
 
-    await handleInvoicePaymentFailed(TABLE, 'tenant-1', 'bot-token', invoice);
+    await handleInvoicePaymentFailed('tenant-1', 'bot-token', invoice);
     expect(mockedSendMessage).not.toHaveBeenCalled();
   });
 });
@@ -211,7 +190,7 @@ describe('handleSubscriptionDeleted', () => {
     mockedListUserRooms.mockResolvedValue([]);
     const sub = { customer: 'cus_abc', id: 'sub_xyz' } as Stripe.Subscription;
 
-    await handleSubscriptionDeleted(TABLE, 'tenant-1', 'bot-token', sub);
+    await handleSubscriptionDeleted('tenant-1', 'bot-token', sub);
 
     expect(mockedSendMessage).toHaveBeenCalledWith(
       'bot-token',
@@ -224,23 +203,19 @@ describe('handleSubscriptionDeleted', () => {
     mockedGetMapping.mockResolvedValue(baseMapping);
     mockedListUserRooms.mockResolvedValue([baseUserRoom]);
     mockedGetRoom.mockResolvedValue({
-      pk: 'TENANT#tenant-1',
-      sk: 'ROOM#room-1',
-      tenantId: 'tenant-1',
-      roomId: 'room-1',
+      id: 'room-1',
+      tenant_id: 'tenant-1',
       name: 'Cool Club',
-      telegramGroupId: -1001234567890,
-      paymentLink: 'https://buy.stripe.com/test',
-      isActive: true,
-      createdAt: '',
-      updatedAt: '',
+      telegram_group_id: '-1001234567890',
+      payment_link: 'https://buy.stripe.com/test',
+      active: true,
     });
     mockedBanChatMember.mockResolvedValue(true);
 
     const sub = { customer: 'cus_abc', id: 'sub_xyz' } as Stripe.Subscription;
-    await handleSubscriptionDeleted(TABLE, 'tenant-1', 'bot-token', sub);
+    await handleSubscriptionDeleted('tenant-1', 'bot-token', sub);
 
-    expect(mockedUpdateStatus).toHaveBeenCalledWith(TABLE, 'tenant-1', 123, 'room-1', 'cancelled');
+    expect(mockedUpdateStatus).toHaveBeenCalledWith('tenant-1', 123, 'room-1', 'cancelled');
     expect(mockedBanChatMember).toHaveBeenCalledWith('bot-token', -1001234567890, 123);
   });
 
@@ -248,22 +223,18 @@ describe('handleSubscriptionDeleted', () => {
     mockedGetMapping.mockResolvedValue(baseMapping);
     mockedListUserRooms.mockResolvedValue([baseUserRoom]);
     mockedGetRoom.mockResolvedValue({
-      pk: 'TENANT#tenant-1',
-      sk: 'ROOM#room-1',
-      tenantId: 'tenant-1',
-      roomId: 'room-1',
+      id: 'room-1',
+      tenant_id: 'tenant-1',
       name: 'Cool Club',
-      paymentLink: 'https://buy.stripe.com/test',
-      isActive: true,
-      createdAt: '',
-      updatedAt: '',
+      payment_link: 'https://buy.stripe.com/test',
+      active: true,
     });
 
     const sub = { customer: 'cus_abc', id: 'sub_xyz' } as Stripe.Subscription;
-    await handleSubscriptionDeleted(TABLE, 'tenant-1', 'bot-token', sub);
+    await handleSubscriptionDeleted('tenant-1', 'bot-token', sub);
 
     expect(mockedBanChatMember).not.toHaveBeenCalled();
-    expect(mockedUpdateStatus).toHaveBeenCalledWith(TABLE, 'tenant-1', 123, 'room-1', 'cancelled');
+    expect(mockedUpdateStatus).toHaveBeenCalledWith('tenant-1', 123, 'room-1', 'cancelled');
   });
 });
 
@@ -274,30 +245,26 @@ describe('handleInvoicePaid', () => {
     mockedGetRoom.mockResolvedValue(null);
 
     const invoice = { customer: 'cus_abc', subscription: 'sub_xyz' } as Stripe.Invoice;
-    await handleInvoicePaid(TABLE, 'tenant-1', 'bot-token', invoice);
+    await handleInvoicePaid('tenant-1', 'bot-token', invoice);
 
-    expect(mockedUpdateStatus).toHaveBeenCalledWith(TABLE, 'tenant-1', 123, 'room-1', 'active');
+    expect(mockedUpdateStatus).toHaveBeenCalledWith('tenant-1', 123, 'room-1', 'active');
   });
 
   it('unbans user from group if they were previously cancelled', async () => {
     mockedGetMapping.mockResolvedValue(baseMapping);
-    mockedListUserRooms.mockResolvedValue([{ ...baseUserRoom, subscriptionStatus: 'cancelled' }]);
+    mockedListUserRooms.mockResolvedValue([{ ...baseUserRoom, subscription_status: 'cancelled' }]);
     mockedGetRoom.mockResolvedValue({
-      pk: 'TENANT#tenant-1',
-      sk: 'ROOM#room-1',
-      tenantId: 'tenant-1',
-      roomId: 'room-1',
+      id: 'room-1',
+      tenant_id: 'tenant-1',
       name: 'Cool Club',
-      telegramGroupId: -1001234567890,
-      paymentLink: 'https://buy.stripe.com/test',
-      isActive: true,
-      createdAt: '',
-      updatedAt: '',
+      telegram_group_id: '-1001234567890',
+      payment_link: 'https://buy.stripe.com/test',
+      active: true,
     });
     mockedUnbanChatMember.mockResolvedValue(true);
 
     const invoice = { customer: 'cus_abc', subscription: 'sub_xyz' } as Stripe.Invoice;
-    await handleInvoicePaid(TABLE, 'tenant-1', 'bot-token', invoice);
+    await handleInvoicePaid('tenant-1', 'bot-token', invoice);
 
     expect(mockedUnbanChatMember).toHaveBeenCalledWith('bot-token', -1001234567890, 123);
   });
@@ -306,7 +273,7 @@ describe('handleInvoicePaid', () => {
     mockedGetMapping.mockResolvedValue(null);
     const invoice = { customer: 'cus_unknown', subscription: 'sub_xyz' } as Stripe.Invoice;
 
-    await handleInvoicePaid(TABLE, 'tenant-1', 'bot-token', invoice);
+    await handleInvoicePaid('tenant-1', 'bot-token', invoice);
     expect(mockedUpdateStatus).not.toHaveBeenCalled();
   });
 });
@@ -314,25 +281,21 @@ describe('handleInvoicePaid', () => {
 describe('handleSubscriptionUpdated', () => {
   it('updates status to active and unbans user', async () => {
     mockedGetMapping.mockResolvedValue(baseMapping);
-    mockedListUserRooms.mockResolvedValue([{ ...baseUserRoom, subscriptionStatus: 'cancelled' }]);
+    mockedListUserRooms.mockResolvedValue([{ ...baseUserRoom, subscription_status: 'cancelled' }]);
     mockedGetRoom.mockResolvedValue({
-      pk: 'TENANT#tenant-1',
-      sk: 'ROOM#room-1',
-      tenantId: 'tenant-1',
-      roomId: 'room-1',
+      id: 'room-1',
+      tenant_id: 'tenant-1',
       name: 'Cool Club',
-      telegramGroupId: -1001234567890,
-      paymentLink: 'https://buy.stripe.com/test',
-      isActive: true,
-      createdAt: '',
-      updatedAt: '',
+      telegram_group_id: '-1001234567890',
+      payment_link: 'https://buy.stripe.com/test',
+      active: true,
     });
     mockedUnbanChatMember.mockResolvedValue(true);
 
     const sub = { customer: 'cus_abc', id: 'sub_xyz', status: 'active' } as Stripe.Subscription;
-    await handleSubscriptionUpdated(TABLE, 'tenant-1', 'bot-token', sub);
+    await handleSubscriptionUpdated('tenant-1', 'bot-token', sub);
 
-    expect(mockedUpdateStatus).toHaveBeenCalledWith(TABLE, 'tenant-1', 123, 'room-1', 'active');
+    expect(mockedUpdateStatus).toHaveBeenCalledWith('tenant-1', 123, 'room-1', 'active');
     expect(mockedUnbanChatMember).toHaveBeenCalledWith('bot-token', -1001234567890, 123);
   });
 
@@ -340,23 +303,19 @@ describe('handleSubscriptionUpdated', () => {
     mockedGetMapping.mockResolvedValue(baseMapping);
     mockedListUserRooms.mockResolvedValue([baseUserRoom]);
     mockedGetRoom.mockResolvedValue({
-      pk: 'TENANT#tenant-1',
-      sk: 'ROOM#room-1',
-      tenantId: 'tenant-1',
-      roomId: 'room-1',
+      id: 'room-1',
+      tenant_id: 'tenant-1',
       name: 'Cool Club',
-      telegramGroupId: -1001234567890,
-      paymentLink: 'https://buy.stripe.com/test',
-      isActive: true,
-      createdAt: '',
-      updatedAt: '',
+      telegram_group_id: '-1001234567890',
+      payment_link: 'https://buy.stripe.com/test',
+      active: true,
     });
     mockedBanChatMember.mockResolvedValue(true);
 
     const sub = { customer: 'cus_abc', id: 'sub_xyz', status: 'canceled' } as Stripe.Subscription;
-    await handleSubscriptionUpdated(TABLE, 'tenant-1', 'bot-token', sub);
+    await handleSubscriptionUpdated('tenant-1', 'bot-token', sub);
 
-    expect(mockedUpdateStatus).toHaveBeenCalledWith(TABLE, 'tenant-1', 123, 'room-1', 'cancelled');
+    expect(mockedUpdateStatus).toHaveBeenCalledWith('tenant-1', 123, 'room-1', 'cancelled');
     expect(mockedBanChatMember).toHaveBeenCalledWith('bot-token', -1001234567890, 123);
   });
 
@@ -364,7 +323,7 @@ describe('handleSubscriptionUpdated', () => {
     mockedGetMapping.mockResolvedValue(null);
     const sub = { customer: 'cus_unknown', id: 'sub_xyz', status: 'active' } as Stripe.Subscription;
 
-    await handleSubscriptionUpdated(TABLE, 'tenant-1', 'bot-token', sub);
+    await handleSubscriptionUpdated('tenant-1', 'bot-token', sub);
     expect(mockedUpdateStatus).not.toHaveBeenCalled();
   });
 });

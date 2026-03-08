@@ -5,7 +5,7 @@ import * as lambda from 'aws-cdk-lib/aws-lambda-nodejs';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import * as sns from 'aws-cdk-lib/aws-sns';
 import * as snsSubscriptions from 'aws-cdk-lib/aws-sns-subscriptions';
-import { Runtime } from 'aws-cdk-lib/aws-lambda';
+import { Runtime, Architecture } from 'aws-cdk-lib/aws-lambda';
 import { Construct } from 'constructs';
 import * as path from 'path';
 import { fileURLToPath } from 'url';
@@ -47,6 +47,7 @@ export class AutoShutdown extends Construct {
     // Lambda that deletes the stack on alarm
     const shutdownFn = new lambda.NodejsFunction(this, 'ShutdownFn', {
       runtime: Runtime.NODEJS_20_X,
+      architecture: Architecture.ARM_64,
       entry: path.join(__dirname, '../../../src/shutdown/handler.ts'),
       handler: 'handler',
       environment: {

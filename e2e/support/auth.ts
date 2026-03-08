@@ -8,7 +8,9 @@ import {
   MessageActionType,
 } from '@aws-sdk/client-cognito-identity-provider';
 
-const cognitoClient = new CognitoIdentityProviderClient({});
+// Use region from environment with fallback to us-east-1
+const region = process.env.AWS_REGION ?? process.env.E2E_REGION ?? 'us-east-1';
+const cognitoClient = new CognitoIdentityProviderClient({ region });
 
 export interface TestUser {
   username: string;

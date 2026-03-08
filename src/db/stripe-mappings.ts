@@ -1,107 +1,84 @@
-import { QueryCommand, TransactWriteCommand } from '@aws-sdk/lib-dynamodb';
-import { docClient } from './client.js';
-import type { StripeMapping, UserProfile, UserRoom } from '../shared/types.js';
+import { graphql, restPost, restPut } from './client.js';
+import type { UserRoom } from '../shared/types.js';
+import { getUserRoom } from './users.js';
+
+interface UserRoomWithStripe {
+  tenant_id: string;
+  room_id: string;
+  telegram_user_id: number;
+  stripe_customer_id: string;
+  stripe_subscription_id: string;
+  subscription_status: 'active' | 'past_due' | 'cancelled' | 'none';
+}
 
 export async function getTenantByStripeCustomer(
-  tableName: string,
   stripeCustomerId: string,
-): Promise<StripeMapping | null> {
-  const result = await docClient.send(
-    new QueryCommand({
-      TableName: tableName,
-      IndexName: 'GSI1',
-      KeyConditionExpression: 'GSI1pk = :pk',
-      ExpressionAttributeValues: {
-        ':pk': `STRIPECUST#${stripeCustomerId}`,
-      },
-    }),
+): Promise<{ tenant_id: string; telegram_user_id: number } | null> {
+  const query = `
+    query GetByStripeCustomerId($stripe_customer_id: String) {
+      getByStripeCustomerId(stripe_customer_id: $stripe_customer_id) {
+        id
+        tenant_id
+        telegram_user_id
+        stripe_customer_id
+      }
+    }
+  `;
+  const result = await graphql<{ getByStripeCustomerId: UserRoom | null }>(
+    '/user_room/graph',
+    query,
+    { stripe_customer_id: stripeCustomerId },
   );
-  return (result.Items?.[0] as StripeMapping) ?? null;
+
+  if (result.getByStripeCustomerId) {
+    return {
+      tenant_id: result.getByStripeCustomerId.tenant_id,
+      telegram_user_id: result.getByStripeCustomerId.telegram_user_id,
+    };
+  }
+  return null;
 }
 
 export async function createUserRoomMapping(
-  tableName: string,
   tenantId: string,
   telegramUserId: number,
   roomId: string,
   stripeCustomerId: string,
   stripeSubscriptionId: string,
+  firstName?: string,
+  username?: string,
 ): Promise<void> {
-  const now = new Date().toISOString();
+  // Check if mapping already exists (for resubscribes)
+  const existing = await getUserRoom(tenantId, telegramUserId, roomId);
 
-  const userProfile: UserProfile = {
-    pk: `TENANT#${tenantId}`,
-    sk: `USER#${telegramUserId}`,
-    tenantId,
-    telegramUserId,
-    createdAt: now,
-    updatedAt: now,
+  if (existing) {
+    // Update existing record with new subscription details
+    const updates: Record<string, unknown> = {
+      stripe_customer_id: stripeCustomerId,
+      stripe_subscription_id: stripeSubscriptionId,
+      subscription_status: 'active',
+    };
+    if (firstName) updates.telegram_first_name = firstName;
+    if (username) updates.telegram_username = username;
+
+    await restPut<UserRoom>('/user_room/api', existing.id, updates);
+    return;
+  }
+
+  // Create new mapping - let meshql-rs restlette generate the ID
+  const userRoom: UserRoomWithStripe = {
+    tenant_id: tenantId,
+    room_id: roomId,
+    telegram_user_id: telegramUserId,
+    stripe_customer_id: stripeCustomerId,
+    stripe_subscription_id: stripeSubscriptionId,
+    subscription_status: 'active',
   };
 
-  const userRoom: UserRoom = {
-    pk: `TENANT#${tenantId}`,
-    sk: `USERROOM#${telegramUserId}#ROOM#${roomId}`,
-    tenantId,
-    telegramUserId,
-    roomId,
-    subscriptionStatus: 'active',
-    stripeCustomerId,
-    stripeSubscriptionId,
-    createdAt: now,
-    updatedAt: now,
-    GSI1pk: `TGUSER#${telegramUserId}`,
-    GSI1sk: `TENANT#${tenantId}#ROOM#${roomId}`,
-  };
+  // Add optional fields
+  const data: Record<string, unknown> = { ...userRoom };
+  if (firstName) data.telegram_first_name = firstName;
+  if (username) data.telegram_username = username;
 
-  const stripeMapping: StripeMapping = {
-    pk: `TENANT#${tenantId}`,
-    sk: `STRIPECUST#${stripeCustomerId}`,
-    tenantId,
-    stripeCustomerId,
-    telegramUserId,
-    createdAt: now,
-    GSI1pk: `STRIPECUST#${stripeCustomerId}`,
-    GSI1sk: `TENANT#${tenantId}`,
-  };
-
-  await docClient.send(
-    new TransactWriteCommand({
-      TransactItems: [
-        {
-          Put: {
-            TableName: tableName,
-            Item: userProfile,
-            ConditionExpression: 'attribute_not_exists(pk)',
-          },
-        },
-        {
-          Put: {
-            TableName: tableName,
-            Item: userRoom,
-          },
-        },
-        {
-          Put: {
-            TableName: tableName,
-            Item: stripeMapping,
-          },
-        },
-      ],
-    }),
-  ).catch(async (err) => {
-    // If user profile already exists, retry without the condition
-    if (err.name === 'TransactionCanceledException') {
-      await docClient.send(
-        new TransactWriteCommand({
-          TransactItems: [
-            { Put: { TableName: tableName, Item: userProfile } },
-            { Put: { TableName: tableName, Item: userRoom } },
-            { Put: { TableName: tableName, Item: stripeMapping } },
-          ],
-        }),
-      );
-      return;
-    }
-    throw err;
-  });
+  await restPost<UserRoom>('/user_room/api', data);
 }

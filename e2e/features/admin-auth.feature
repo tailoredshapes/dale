@@ -10,6 +10,6 @@ Feature: Admin API Authentication
     Then the response status should be 401
 
   @auth
-  Scenario: Authenticated request with no tenant returns 401
+  Scenario: Authenticated request with no tenant returns 404
     When I send an authenticated GET request to "/api/tenant"
-    Then the response status should be 401
+    Then the response status should be 404

@@ -1,7 +1,5 @@
-import { SSMClient, GetParametersByPathCommand } from '@aws-sdk/client-ssm';
 import type { TenantSecrets } from './types.js';
-
-const ssm = new SSMClient({});
+import { getTenantById } from '../db/tenants.js';
 
 interface CacheEntry {
   secrets: TenantSecrets;
@@ -17,47 +15,23 @@ export async function getTenantSecrets(tenantId: string): Promise<TenantSecrets>
     return cached.secrets;
   }
 
-  const path = `/dale/tenants/${tenantId}/`;
-  const params = new Map<string, string>();
+  const tenant = await getTenantById(tenantId);
+  if (!tenant) {
+    throw new Error(`Tenant ${tenantId} not found`);
+  }
 
-  let nextToken: string | undefined;
-  do {
-    const result = await ssm.send(
-      new GetParametersByPathCommand({
-        Path: path,
-        WithDecryption: true,
-        NextToken: nextToken,
-      }),
-    );
-    for (const param of result.Parameters ?? []) {
-      if (param.Name && param.Value) {
-        const key = param.Name.replace(path, '');
-        params.set(key, param.Value);
-      }
-    }
-    nextToken = result.NextToken;
-  } while (nextToken);
-
-  const telegramBotToken = params.get('telegram-bot-token');
-  const telegramWebhookSecret = params.get('telegram-webhook-secret');
-  const stripeSecretKey = params.get('stripe-secret-key');
-  const stripeWebhookSecret = params.get('stripe-webhook-secret');
-  const paypalClientId = params.get('paypal-client-id');
-  const paypalClientSecret = params.get('paypal-client-secret');
-  const paypalWebhookId = params.get('paypal-webhook-id');
-
-  if (!telegramBotToken || !telegramWebhookSecret) {
-    throw new Error(`Missing SSM parameters for tenant ${tenantId}`);
+  if (!tenant.telegram_bot_token || !tenant.webhook_secret) {
+    throw new Error(`Missing required secrets for tenant ${tenantId}`);
   }
 
   const secrets: TenantSecrets = {
-    telegramBotToken,
-    telegramWebhookSecret,
-    stripeSecretKey: stripeSecretKey || undefined,
-    stripeWebhookSecret: stripeWebhookSecret || undefined,
-    paypalClientId: paypalClientId || undefined,
-    paypalClientSecret: paypalClientSecret || undefined,
-    paypalWebhookId: paypalWebhookId || undefined,
+    telegramBotToken: tenant.telegram_bot_token,
+    telegramWebhookSecret: tenant.webhook_secret,
+    stripeSecretKey: tenant.stripe_secret_key || undefined,
+    stripeWebhookSecret: tenant.stripe_webhook_secret || undefined,
+    paypalClientId: tenant.paypal_client_id || undefined,
+    paypalClientSecret: tenant.paypal_client_secret || undefined,
+    paypalWebhookId: tenant.paypal_webhook_id || undefined,
   };
 
   cache.set(tenantId, { secrets, expiresAt: Date.now() + TTL_MS });

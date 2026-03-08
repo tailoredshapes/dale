@@ -99,4 +99,27 @@ describe('verifyPayPalWebhook', () => {
 
     await expect(verifyPayPalWebhook(BASE_URL, HEADERS, '{}', TENANT_SECRETS)).rejects.toThrow('PayPal token request failed');
   });
+
+  describe('local mode bypass', () => {
+    const originalEnv = process.env.SKIP_PAYPAL_SIGNATURE_VERIFY;
+
+    afterEach(() => {
+      if (originalEnv === undefined) {
+        delete process.env.SKIP_PAYPAL_SIGNATURE_VERIFY;
+      } else {
+        process.env.SKIP_PAYPAL_SIGNATURE_VERIFY = originalEnv;
+      }
+    });
+
+    it('bypasses verification when SKIP_PAYPAL_SIGNATURE_VERIFY is set', async () => {
+      process.env.SKIP_PAYPAL_SIGNATURE_VERIFY = 'true';
+
+      // Don't mock fetch - should not be called
+      global.fetch = vi.fn();
+
+      const result = await verifyPayPalWebhook(BASE_URL, HEADERS, '{}', TENANT_SECRETS);
+      expect(result).toBe(true);
+      expect(global.fetch).not.toHaveBeenCalled();
+    });
+  });
 });

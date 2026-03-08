@@ -1,11 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 vi.mock('../../db/rooms.js', () => ({
-  createRoom: vi.fn(),
-}));
-
-vi.mock('ulid', () => ({
-  ulid: vi.fn().mockReturnValue('01TEST'),
+  // createRoom returns the room with a meshql-rs generated ID
+  createRoom: vi.fn().mockResolvedValue({ id: 'meshql-room-uuid' }),
 }));
 
 import { handleMyChatMember } from '../group-handler.js';
@@ -14,14 +11,12 @@ import type { TelegramChatMemberUpdated } from '../../shared/types.js';
 
 const mockedCreateRoom = vi.mocked(createRoom);
 
-const TABLE = 'dale-test-table';
-
 beforeEach(() => {
   vi.clearAllMocks();
 });
 
 describe('handleMyChatMember', () => {
-  const ctx = { tableName: TABLE, tenantId: 'tenant-1', botUserId: 123 };
+  const ctx = { tenantId: 'tenant-1', botUserId: 123 };
 
   it('creates room when bot is added as member', async () => {
     const update: TelegramChatMemberUpdated = {
@@ -34,13 +29,13 @@ describe('handleMyChatMember', () => {
 
     await handleMyChatMember(ctx, update);
 
-    expect(mockedCreateRoom).toHaveBeenCalledWith(TABLE, {
-      tenantId: 'tenant-1',
-      roomId: '01TEST',
+    // No id field - let meshql-rs restlette generate it
+    expect(mockedCreateRoom).toHaveBeenCalledWith({
+      tenant_id: 'tenant-1',
       name: 'My Group',
-      telegramGroupId: -100999,
-      paymentLink: '',
-      isActive: false,
+      telegram_group_id: '-100999',
+      payment_link: '',
+      active: false,
     });
   });
 

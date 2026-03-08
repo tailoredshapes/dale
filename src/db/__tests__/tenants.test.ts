@@ -1,93 +1,140 @@
-import { describe, it, expect, beforeEach } from 'vitest';
-import { mockClient } from 'aws-sdk-client-mock';
-import { GetCommand, PutCommand, QueryCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
-import { docClient } from '../client.js';
-import { createTenant, getTenantById, getTenantByCognitoSub, updateTenant } from '../tenants.js';
+import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
+import { createTenant, getTenantById, getTenantByWebhookSecret, updateTenant } from '../tenants.js';
+import { MESHQL_URL } from '../client.js';
 
-const ddbMock = mockClient(docClient);
-const TABLE = 'dale-test-table';
+const mockFetch = vi.fn();
+vi.stubGlobal('fetch', mockFetch);
 
 beforeEach(() => {
-  ddbMock.reset();
+  mockFetch.mockReset();
+});
+
+afterEach(() => {
+  vi.restoreAllMocks();
 });
 
 describe('createTenant', () => {
-  it('writes tenant record with correct keys', async () => {
-    ddbMock.on(PutCommand).resolves({});
+  it('creates tenant via REST POST', async () => {
+    const tenant = {
+      id: 'tenant-1',
+      display_name: 'Test Creator',
+      webhook_secret: 'secret-123',
+    };
 
-    const result = await createTenant(TABLE, {
-      tenantId: 'tenant-1',
-      cognitoSub: 'sub-123',
-      displayName: 'Test Creator',
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => tenant,
     });
 
-    expect(result.pk).toBe('TENANT#tenant-1');
-    expect(result.sk).toBe('METADATA');
-    expect(result.GSI1pk).toBe('COGNITO#sub-123');
-    expect(result.GSI1sk).toBe('TENANT');
-    expect(result.displayName).toBe('Test Creator');
+    const result = await createTenant({
+      id: 'tenant-1',
+      display_name: 'Test Creator',
+      webhook_secret: 'secret-123',
+    });
 
-    const call = ddbMock.commandCalls(PutCommand)[0];
-    expect(call.args[0].input.TableName).toBe(TABLE);
+    expect(result).toEqual(tenant);
+    expect(mockFetch).toHaveBeenCalledWith(
+      `${MESHQL_URL}/tenant/api`,
+      expect.objectContaining({
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    );
+
+    const body = JSON.parse(mockFetch.mock.calls[0][1].body);
+    expect(body.id).toBe('tenant-1');
+    expect(body.display_name).toBe('Test Creator');
   });
 });
 
 describe('getTenantById', () => {
-  it('returns tenant when found', async () => {
+  it('returns tenant via REST GET', async () => {
     const tenant = {
-      pk: 'TENANT#tenant-1',
-      sk: 'METADATA',
-      tenantId: 'tenant-1',
-      cognitoSub: 'sub-123',
-      displayName: 'Test',
+      id: 'tenant-1',
+      display_name: 'Test',
     };
-    ddbMock.on(GetCommand).resolves({ Item: tenant });
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => tenant,
+    });
 
-    const result = await getTenantById(TABLE, 'tenant-1');
+    const result = await getTenantById('tenant-1');
     expect(result).toEqual(tenant);
+    expect(mockFetch).toHaveBeenCalledWith(`${MESHQL_URL}/tenant/api/tenant-1`);
   });
 
-  it('returns null when not found', async () => {
-    ddbMock.on(GetCommand).resolves({});
-    const result = await getTenantById(TABLE, 'missing');
+  it('returns null when not found (404)', async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: false,
+      status: 404,
+    });
+
+    const result = await getTenantById('missing');
     expect(result).toBeNull();
   });
 });
 
-describe('getTenantByCognitoSub', () => {
-  it('queries GSI1 and returns tenant', async () => {
+describe('getTenantByWebhookSecret', () => {
+  it('queries GraphQL and returns tenant', async () => {
     const tenant = {
-      pk: 'TENANT#tenant-1',
-      sk: 'METADATA',
-      tenantId: 'tenant-1',
-      cognitoSub: 'sub-123',
+      id: 'tenant-1',
+      display_name: 'Test',
+      webhook_secret: 'secret-123',
     };
-    ddbMock.on(QueryCommand).resolves({ Items: [tenant] });
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ data: { getByWebhookSecret: tenant } }),
+    });
 
-    const result = await getTenantByCognitoSub(TABLE, 'sub-123');
+    const result = await getTenantByWebhookSecret('secret-123');
     expect(result).toEqual(tenant);
 
-    const call = ddbMock.commandCalls(QueryCommand)[0];
-    expect(call.args[0].input.IndexName).toBe('GSI1');
-    expect(call.args[0].input.ExpressionAttributeValues![':pk']).toBe('COGNITO#sub-123');
+    expect(mockFetch).toHaveBeenCalledWith(
+      `${MESHQL_URL}/tenant/graph`,
+      expect.objectContaining({
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    );
+
+    const body = JSON.parse(mockFetch.mock.calls[0][1].body);
+    expect(body.variables).toEqual({ webhook_secret: 'secret-123' });
   });
 
   it('returns null when not found', async () => {
-    ddbMock.on(QueryCommand).resolves({ Items: [] });
-    const result = await getTenantByCognitoSub(TABLE, 'missing');
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ data: { getByWebhookSecret: null } }),
+    });
+
+    const result = await getTenantByWebhookSecret('missing');
     expect(result).toBeNull();
   });
 });
 
 describe('updateTenant', () => {
-  it('updates displayName', async () => {
-    ddbMock.on(UpdateCommand).resolves({});
+  it('updates tenant via REST PUT', async () => {
+    const updated = {
+      id: 'tenant-1',
+      display_name: 'New Name',
+    };
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => updated,
+    });
 
-    await updateTenant(TABLE, 'tenant-1', { displayName: 'New Name' });
+    const result = await updateTenant('tenant-1', { display_name: 'New Name' });
+    expect(result).toEqual(updated);
 
-    const call = ddbMock.commandCalls(UpdateCommand)[0];
-    const input = call.args[0].input;
-    expect(input.Key).toEqual({ pk: 'TENANT#tenant-1', sk: 'METADATA' });
-    expect(input.ExpressionAttributeValues![':displayName']).toBe('New Name');
+    expect(mockFetch).toHaveBeenCalledWith(
+      `${MESHQL_URL}/tenant/api/tenant-1`,
+      expect.objectContaining({
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    );
+
+    const body = JSON.parse(mockFetch.mock.calls[0][1].body);
+    expect(body.display_name).toBe('New Name');
   });
 });

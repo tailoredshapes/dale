@@ -40,10 +40,6 @@ vi.mock('../../telegram/api.js', () => ({
   setWebhook: vi.fn(),
 }));
 
-vi.mock('ulid', () => ({
-  ulid: vi.fn().mockReturnValue('01TEST'),
-}));
-
 import { handler } from '../api.js';
 import { extractAuthContext, extractCognitoSub } from '../middleware/auth.js';
 
@@ -106,10 +102,20 @@ describe('Admin API handler', () => {
     expect(result.statusCode).toBe(200);
   });
 
-  it('returns 401 for unauthorized requests', async () => {
+  it('returns 401 for unauthenticated requests (no JWT)', async () => {
     mockedAuth.mockResolvedValue(null);
+    mockedCognitoSub.mockReturnValue(null); // No JWT present
     const result = await handler(makeEvent('GET', '/api/tenant')) as APIGatewayProxyStructuredResultV2;
     expect(result.statusCode).toBe(401);
+  });
+
+  it('returns 404 for authenticated user without tenant (not onboarded)', async () => {
+    mockedAuth.mockResolvedValue(null); // No tenant found
+    mockedCognitoSub.mockReturnValue('user-123'); // But user is authenticated
+    const result = await handler(makeEvent('GET', '/api/tenant')) as APIGatewayProxyStructuredResultV2;
+    expect(result.statusCode).toBe(404);
+    const body = JSON.parse(result.body as string);
+    expect(body.error).toContain('not found');
   });
 
   it('routes POST /api/admin/invite', async () => {

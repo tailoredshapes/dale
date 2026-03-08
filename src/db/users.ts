@@ -1,135 +1,138 @@
-import { GetCommand, PutCommand, QueryCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
-import { docClient } from './client.js';
-import type { SubscriptionStatus, UserProfile, UserRoom } from '../shared/types.js';
+import { graphql, restPost, restPut, restGet } from './client.js';
+import type { SubscriptionStatus, UserRoom } from '../shared/types.js';
 
-export async function getUserProfile(
-  tableName: string,
-  tenantId: string,
-  telegramUserId: number,
-): Promise<UserProfile | null> {
-  const result = await docClient.send(
-    new GetCommand({
-      TableName: tableName,
-      Key: { pk: `TENANT#${tenantId}`, sk: `USER#${telegramUserId}` },
-    }),
-  );
-  return (result.Item as UserProfile) ?? null;
-}
-
-export async function createUserProfile(
-  tableName: string,
-  tenantId: string,
-  telegramUserId: number,
-  firstName?: string,
-  username?: string,
-): Promise<UserProfile> {
-  const now = new Date().toISOString();
-  const item: UserProfile = {
-    pk: `TENANT#${tenantId}`,
-    sk: `USER#${telegramUserId}`,
-    tenantId,
-    telegramUserId,
-    firstName,
-    username,
-    createdAt: now,
-    updatedAt: now,
-  };
-  await docClient.send(
-    new PutCommand({ TableName: tableName, Item: item }),
-  );
-  return item;
+interface UserRoomInput {
+  tenant_id: string;
+  room_id: string;
+  telegram_user_id: number;
+  telegram_first_name?: string;
+  telegram_username?: string;
+  stripe_customer_id?: string;
+  stripe_subscription_id?: string;
+  paypal_payer_id?: string;
+  paypal_subscription_id?: string;
+  subscription_status: SubscriptionStatus;
 }
 
 export async function getUserRoom(
-  tableName: string,
   tenantId: string,
   telegramUserId: number,
   roomId: string,
 ): Promise<UserRoom | null> {
-  const result = await docClient.send(
-    new GetCommand({
-      TableName: tableName,
-      Key: {
-        pk: `TENANT#${tenantId}`,
-        sk: `USERROOM#${telegramUserId}#ROOM#${roomId}`,
-      },
-    }),
+  const query = `
+    query GetByTenantUserRoom($tenant_id: String, $telegram_user_id: Int, $room_id: String) {
+      getByTenantUserRoom(tenant_id: $tenant_id, telegram_user_id: $telegram_user_id, room_id: $room_id) {
+        id
+        tenant_id
+        room_id
+        telegram_user_id
+        telegram_first_name
+        telegram_username
+        stripe_customer_id
+        stripe_subscription_id
+        paypal_payer_id
+        paypal_subscription_id
+        subscription_status
+      }
+    }
+  `;
+  const result = await graphql<{ getByTenantUserRoom: UserRoom | null }>(
+    '/user_room/graph',
+    query,
+    { tenant_id: tenantId, telegram_user_id: telegramUserId, room_id: roomId },
   );
-  return (result.Item as UserRoom) ?? null;
+  return result.getByTenantUserRoom;
 }
 
 export async function listUserRooms(
-  tableName: string,
   tenantId: string,
   telegramUserId: number,
 ): Promise<UserRoom[]> {
-  const result = await docClient.send(
-    new QueryCommand({
-      TableName: tableName,
-      KeyConditionExpression: 'pk = :pk AND begins_with(sk, :skPrefix)',
-      ExpressionAttributeValues: {
-        ':pk': `TENANT#${tenantId}`,
-        ':skPrefix': `USERROOM#${telegramUserId}#ROOM#`,
-      },
-    }),
+  const query = `
+    query GetByTenantAndUser($tenant_id: String, $telegram_user_id: Int) {
+      getByTenantAndUser(tenant_id: $tenant_id, telegram_user_id: $telegram_user_id) {
+        id
+        tenant_id
+        room_id
+        telegram_user_id
+        telegram_first_name
+        telegram_username
+        stripe_customer_id
+        stripe_subscription_id
+        paypal_payer_id
+        paypal_subscription_id
+        subscription_status
+      }
+    }
+  `;
+  const result = await graphql<{ getByTenantAndUser: UserRoom[] }>(
+    '/user_room/graph',
+    query,
+    { tenant_id: tenantId, telegram_user_id: telegramUserId },
   );
-  return (result.Items as UserRoom[]) ?? [];
+  return result.getByTenantAndUser ?? [];
 }
 
 export async function listRoomSubscribers(
-  tableName: string,
   tenantId: string,
   roomId: string,
 ): Promise<UserRoom[]> {
-  // Query all USERROOM entries for this tenant, then filter by roomId
-  const result = await docClient.send(
-    new QueryCommand({
-      TableName: tableName,
-      KeyConditionExpression: 'pk = :pk AND begins_with(sk, :skPrefix)',
-      ExpressionAttributeValues: {
-        ':pk': `TENANT#${tenantId}`,
-        ':skPrefix': 'USERROOM#',
-      },
-    }),
+  const query = `
+    query GetByTenantAndRoom($tenant_id: String, $room_id: String) {
+      getByTenantAndRoom(tenant_id: $tenant_id, room_id: $room_id) {
+        id
+        tenant_id
+        room_id
+        telegram_user_id
+        telegram_first_name
+        telegram_username
+        stripe_customer_id
+        stripe_subscription_id
+        paypal_payer_id
+        paypal_subscription_id
+        subscription_status
+      }
+    }
+  `;
+  const result = await graphql<{ getByTenantAndRoom: UserRoom[] }>(
+    '/user_room/graph',
+    query,
+    { tenant_id: tenantId, room_id: roomId },
   );
-  const allUserRooms = (result.Items as UserRoom[]) ?? [];
-  return allUserRooms.filter((ur) => ur.roomId === roomId);
+  return result.getByTenantAndRoom ?? [];
 }
 
 export async function updateUserRoomStatus(
-  tableName: string,
   tenantId: string,
   telegramUserId: number,
   roomId: string,
   status: SubscriptionStatus,
   stripeSubscriptionId?: string,
 ): Promise<void> {
-  const expressionParts = ['#status = :status', '#updatedAt = :updatedAt'];
-  const names: Record<string, string> = {
-    '#status': 'subscriptionStatus',
-    '#updatedAt': 'updatedAt',
-  };
-  const values: Record<string, string> = {
-    ':status': status,
-    ':updatedAt': new Date().toISOString(),
-  };
-
-  if (stripeSubscriptionId) {
-    expressionParts.push('#subId = :subId');
-    names['#subId'] = 'stripeSubscriptionId';
-    values[':subId'] = stripeSubscriptionId;
+  // Find the existing user room
+  const existing = await getUserRoom(tenantId, telegramUserId, roomId);
+  if (!existing) {
+    throw new Error(`UserRoom not found for tenant ${tenantId}, user ${telegramUserId}, room ${roomId}`);
   }
 
-  await docClient.send(
-    new UpdateCommand({
-      TableName: tableName,
-      Key: {
-        pk: `TENANT#${tenantId}`,
-        sk: `USERROOM#${telegramUserId}#ROOM#${roomId}`,
-      },
-      UpdateExpression: `SET ${expressionParts.join(', ')}`,
-      ExpressionAttributeNames: names,
-      ExpressionAttributeValues: values,
-    }),
-  );
+  const updates: Partial<UserRoomInput> = {
+    subscription_status: status,
+  };
+  if (stripeSubscriptionId) {
+    updates.stripe_subscription_id = stripeSubscriptionId;
+  }
+
+  await restPut<UserRoom>('/user_room/api', existing.id, updates);
+}
+
+export async function createUserRoom(
+  userRoom: UserRoomInput,
+): Promise<UserRoom> {
+  return restPost<UserRoom>('/user_room/api', userRoom);
+}
+
+export async function getUserRoomById(
+  userRoomId: string,
+): Promise<UserRoom | null> {
+  return restGet<UserRoom>('/user_room/api', userRoomId);
 }

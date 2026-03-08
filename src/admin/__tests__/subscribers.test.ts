@@ -9,7 +9,6 @@ import { listRoomSubscribers } from '../../db/users.js';
 
 const mockedListSubscribers = vi.mocked(listRoomSubscribers);
 
-const TABLE = 'dale-test-table';
 const AUTH = { cognitoSub: 'sub-123', tenantId: 'tenant-1' };
 
 beforeEach(() => {
@@ -20,14 +19,15 @@ describe('handleListSubscribers', () => {
   it('returns subscribers list', async () => {
     mockedListSubscribers.mockResolvedValue([
       {
-        pk: 'TENANT#tenant-1', sk: 'USERROOM#123#ROOM#r1',
-        tenantId: 'tenant-1', telegramUserId: 123, roomId: 'r1',
-        subscriptionStatus: 'active', createdAt: '', updatedAt: '',
-        GSI1pk: 'TGUSER#123', GSI1sk: 'TENANT#tenant-1#ROOM#r1',
+        id: 'ur-1',
+        tenant_id: 'tenant-1',
+        telegram_user_id: 123,
+        room_id: 'r1',
+        subscription_status: 'active',
       },
     ]);
 
-    const result = await handleListSubscribers(TABLE, AUTH, 'r1');
+    const result = await handleListSubscribers(AUTH, 'r1');
     expect(result.statusCode).toBe(200);
     const subs = JSON.parse(result.body);
     expect(subs).toHaveLength(1);

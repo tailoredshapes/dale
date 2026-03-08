@@ -1,5 +1,6 @@
 import { getTenantByPayPalPayer, createPayPalUserRoomMapping } from '../db/paypal-mappings.js';
-import { sendMessage } from '../telegram/api.js';
+import { listUserRooms, updateUserRoomStatus, getUserRoom } from '../db/users.js';
+import { sendMessage, banChatMember, unbanChatMember, createChatInviteLink } from '../telegram/api.js';
 import { getRoom } from '../db/rooms.js';
 
 export function parseCustomId(ref: string | null | undefined): {
@@ -16,7 +17,6 @@ export function parseCustomId(ref: string | null | undefined): {
 }
 
 export async function handleSubscriptionActivated(
-  tableName: string,
   tenantId: string,
   botToken: string,
   event: Record<string, unknown>,
@@ -43,27 +43,43 @@ export async function handleSubscriptionActivated(
     return;
   }
 
-  await createPayPalUserRoomMapping(
-    tableName,
-    tenantId,
-    parsed.telegramUserId,
-    parsed.roomId,
-    paypalPayerId,
-    paypalSubscriptionId,
-  );
+  // Check if user already has a mapping for this room (reactivation case)
+  const existing = await getUserRoom(tenantId, parsed.telegramUserId, parsed.roomId);
+  if (existing) {
+    // Reactivation: update status to active
+    await updateUserRoomStatus(tenantId, parsed.telegramUserId, parsed.roomId, 'active');
+  } else {
+    // New subscription: create mapping
+    await createPayPalUserRoomMapping(
+      tenantId,
+      parsed.telegramUserId,
+      parsed.roomId,
+      paypalPayerId,
+      paypalSubscriptionId,
+    );
+  }
 
-  const room = await getRoom(tableName, tenantId, parsed.roomId);
+  const room = await getRoom(tenantId, parsed.roomId);
   const groupName = room?.name ?? 'your group';
 
-  await sendMessage(
-    botToken,
-    parsed.telegramUserId,
-    `You're in! \u{1F389} Your subscription to *${groupName}* is now active.`,
-  );
+  let inviteLink: string | null = null;
+  if (room?.telegram_group_id) {
+    // Unban user in case they were previously banned
+    await unbanChatMember(botToken, Number(room.telegram_group_id), parsed.telegramUserId);
+    inviteLink = await createChatInviteLink(botToken, Number(room.telegram_group_id));
+    if (!inviteLink) {
+      console.warn(`Failed to create invite link for room ${parsed.roomId}`);
+    }
+  }
+
+  const message = inviteLink
+    ? `You're in! \u{1F389} Your subscription to *${groupName}* is now active.\n\n👉 [Join the group](${inviteLink})`
+    : `You're in! \u{1F389} Your subscription to *${groupName}* is now active.`;
+
+  await sendMessage(botToken, parsed.telegramUserId, message);
 }
 
 export async function handleSubscriptionCancelled(
-  tableName: string,
   tenantId: string,
   botToken: string,
   event: Record<string, unknown>,
@@ -71,20 +87,34 @@ export async function handleSubscriptionCancelled(
   const resource = event.resource as Record<string, unknown>;
   const subscriber = resource.subscriber as Record<string, unknown> | undefined;
   const paypalPayerId = (subscriber?.payer_id as string) ?? '';
+  const paypalSubscriptionId = resource.id as string ?? '';
   if (!paypalPayerId) return;
 
-  const mapping = await getTenantByPayPalPayer(tableName, paypalPayerId);
-  if (!mapping || mapping.tenantId !== tenantId) return;
+  const mapping = await getTenantByPayPalPayer(paypalPayerId);
+  if (!mapping || mapping.tenant_id !== tenantId) return;
+
+  const userRooms = await listUserRooms(tenantId, mapping.telegram_user_id);
+  const relevant = paypalSubscriptionId
+    ? userRooms.filter((ur) => ur.paypal_subscription_id === paypalSubscriptionId)
+    : userRooms;
+
+  for (const ur of relevant) {
+    await updateUserRoomStatus(tenantId, mapping.telegram_user_id, ur.room_id, 'cancelled');
+
+    const room = await getRoom(tenantId, ur.room_id);
+    if (room?.telegram_group_id) {
+      await banChatMember(botToken, Number(room.telegram_group_id), mapping.telegram_user_id);
+    }
+  }
 
   await sendMessage(
     botToken,
-    mapping.telegramUserId,
+    mapping.telegram_user_id,
     'Your subscription has been cancelled. Use /start to resubscribe anytime.',
   );
 }
 
 export async function handleSubscriptionSuspended(
-  tableName: string,
   tenantId: string,
   botToken: string,
   event: Record<string, unknown>,
@@ -92,20 +122,29 @@ export async function handleSubscriptionSuspended(
   const resource = event.resource as Record<string, unknown>;
   const subscriber = resource.subscriber as Record<string, unknown> | undefined;
   const paypalPayerId = (subscriber?.payer_id as string) ?? '';
+  const paypalSubscriptionId = resource.id as string ?? '';
   if (!paypalPayerId) return;
 
-  const mapping = await getTenantByPayPalPayer(tableName, paypalPayerId);
-  if (!mapping || mapping.tenantId !== tenantId) return;
+  const mapping = await getTenantByPayPalPayer(paypalPayerId);
+  if (!mapping || mapping.tenant_id !== tenantId) return;
+
+  const userRooms = await listUserRooms(tenantId, mapping.telegram_user_id);
+  const relevant = paypalSubscriptionId
+    ? userRooms.filter((ur) => ur.paypal_subscription_id === paypalSubscriptionId)
+    : userRooms;
+
+  for (const ur of relevant) {
+    await updateUserRoomStatus(tenantId, mapping.telegram_user_id, ur.room_id, 'past_due');
+  }
 
   await sendMessage(
     botToken,
-    mapping.telegramUserId,
+    mapping.telegram_user_id,
     'Your subscription payment is past due. Please update your payment method to keep your subscription active.',
   );
 }
 
 export async function handlePaymentCompleted(
-  tableName: string,
   tenantId: string,
   event: Record<string, unknown>,
 ): Promise<void> {
@@ -113,13 +152,11 @@ export async function handlePaymentCompleted(
 }
 
 export async function handlePaymentDenied(
-  tableName: string,
   tenantId: string,
   botToken: string,
   event: Record<string, unknown>,
 ): Promise<void> {
   const resource = event.resource as Record<string, unknown>;
-  const customId = resource.custom as string | undefined;
 
   // For sale events, try to find the payer via billing_agreement_id or custom field
   // The payer email might be available but we need the payer_id for lookup
@@ -130,12 +167,12 @@ export async function handlePaymentDenied(
     return;
   }
 
-  const mapping = await getTenantByPayPalPayer(tableName, paypalPayerId);
-  if (!mapping || mapping.tenantId !== tenantId) return;
+  const mapping = await getTenantByPayPalPayer(paypalPayerId);
+  if (!mapping || mapping.tenant_id !== tenantId) return;
 
   await sendMessage(
     botToken,
-    mapping.telegramUserId,
+    mapping.telegram_user_id,
     'Your PayPal payment was denied. Please update your payment method to keep your subscription active.',
   );
 }

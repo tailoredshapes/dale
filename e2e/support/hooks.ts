@@ -2,18 +2,28 @@ import { Before, After } from '@cucumber/cucumber';
 import { chromium } from 'playwright';
 import { DaleWorld } from './world.js';
 import { createTestUser, deleteTestUser } from './auth.js';
-import { cleanupDynamoDBTenant, cleanupSSMParams, cleanupWebhookSecret } from './cleanup.js';
+import { createLocalTestUser, deleteLocalTestUser } from './local-auth.js';
+import { cleanupDynamoDBTenant, cleanupWebhookSecret } from './cleanup.js';
+import { clearAllSecretsCache } from './ssm.js';
 import { createTelegramClient, deleteGroup } from './gramjs.js';
 
 Before<DaleWorld>({ tags: '@auth' }, async function () {
-  const user = await createTestUser(
-    this.config.userPoolId,
-    this.config.userPoolClientId,
-  );
-  this.idToken = user.idToken;
-  this.accessToken = user.accessToken;
-  this.refreshToken = user.refreshToken;
-  this.cognitoUsername = user.username;
+  if (this.config.localMode) {
+    const user = await createLocalTestUser(this.config.adminApiUrl);
+    this.idToken = user.idToken;
+    this.accessToken = user.accessToken;
+    this.refreshToken = user.refreshToken;
+    this.cognitoUsername = user.username;
+  } else {
+    const user = await createTestUser(
+      this.config.userPoolId,
+      this.config.userPoolClientId,
+    );
+    this.idToken = user.idToken;
+    this.accessToken = user.accessToken;
+    this.refreshToken = user.refreshToken;
+    this.cognitoUsername = user.username;
+  }
 });
 
 Before<DaleWorld>({ tags: '@real-telegram' }, async function () {
@@ -59,19 +69,25 @@ After<DaleWorld>({ tags: '@tutorial' }, async function () {
 });
 
 After<DaleWorld>(async function () {
-  // Clean up tenants from DynamoDB and SSM
+  // Clean up tenant data (clears local secrets cache)
   for (const tenantId of this.tenantIds) {
-    await cleanupDynamoDBTenant(this.config.tableName, tenantId);
-    await cleanupSSMParams(tenantId);
+    await cleanupDynamoDBTenant(this.config, tenantId);
   }
 
-  // Clean up webhook secrets
+  // Clean up webhook secrets (no-op but kept for consistency)
   for (const secret of this.webhookSecrets) {
-    await cleanupWebhookSecret(this.config.tableName, secret);
+    await cleanupWebhookSecret(this.config, secret);
   }
+
+  // Clear all cached secrets to ensure clean state for next scenario
+  clearAllSecretsCache();
 
   // Clean up Cognito user
   if (this.cognitoUsername) {
-    await deleteTestUser(this.config.userPoolId, this.cognitoUsername);
+    if (this.config.localMode) {
+      await deleteLocalTestUser(this.config.adminApiUrl, this.cognitoUsername);
+    } else {
+      await deleteTestUser(this.config.userPoolId, this.cognitoUsername);
+    }
   }
 });

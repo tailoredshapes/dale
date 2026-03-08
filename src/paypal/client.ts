@@ -32,6 +32,11 @@ export async function registerPayPalWebhook(
   webhookUrl: string,
   eventTypes: string[],
 ): Promise<string> {
+  // Skip actual registration in E2E/local mode
+  if (process.env.SKIP_PAYPAL_REGISTRATION === 'true') {
+    return `WH-mock-${Date.now()}`;
+  }
+
   const accessToken = await getAccessToken(baseUrl, clientId, clientSecret);
 
   const response = await fetch(`${baseUrl}/v1/notifications/webhooks`, {

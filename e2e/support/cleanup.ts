@@ -1,98 +1,36 @@
-import { DynamoDBClient, QueryCommand, BatchWriteItemCommand } from '@aws-sdk/client-dynamodb';
-import { SSMClient, GetParametersByPathCommand, DeleteParameterCommand } from '@aws-sdk/client-ssm';
+/**
+ * Cleanup utilities for E2E tests.
+ *
+ * Note: DynamoDB and SSM cleanup have been removed as the system now uses
+ * meshql-rs for data storage. The meshql-rs data is ephemeral in the test
+ * docker volume and doesn't require explicit cleanup.
+ */
+import type { E2EConfig } from '../env.js';
+import { clearTenantSecretsCache } from './ssm.js';
 
-const dynamoClient = new DynamoDBClient({});
-const ssmClient = new SSMClient({});
-
-export async function cleanupDynamoDBTenant(tableName: string, tenantId: string): Promise<void> {
-  const prefix = `TENANT#${tenantId}`;
-
-  // Query all items with pk starting with TENANT#{tenantId}
-  let lastKey: any;
-  do {
-    const result = await dynamoClient.send(
-      new QueryCommand({
-        TableName: tableName,
-        KeyConditionExpression: 'pk = :pk',
-        ExpressionAttributeValues: {
-          ':pk': { S: prefix },
-        },
-        ExclusiveStartKey: lastKey,
-      }),
-    );
-
-    if (result.Items && result.Items.length > 0) {
-      // Batch delete in groups of 25
-      for (let i = 0; i < result.Items.length; i += 25) {
-        const batch = result.Items.slice(i, i + 25);
-        await dynamoClient.send(
-          new BatchWriteItemCommand({
-            RequestItems: {
-              [tableName]: batch.map((item) => ({
-                DeleteRequest: {
-                  Key: { pk: item.pk, sk: item.sk },
-                },
-              })),
-            },
-          }),
-        );
-      }
-    }
-
-    lastKey = result.LastEvaluatedKey;
-  } while (lastKey);
+/**
+ * Clean up tenant data.
+ * Now just clears the local secrets cache since meshql-rs data is ephemeral.
+ */
+export async function cleanupDynamoDBTenant(config: E2EConfig, tenantId: string): Promise<void> {
+  // meshql-rs data is ephemeral in the test volume - no cleanup needed
+  // Just clear the local secrets cache
+  clearTenantSecretsCache(tenantId);
 }
 
-export async function cleanupWebhookSecret(tableName: string, webhookSecret: string): Promise<void> {
-  const pk = `WHSECRET#${webhookSecret}`;
-  try {
-    await dynamoClient.send(
-      new BatchWriteItemCommand({
-        RequestItems: {
-          [tableName]: [
-            {
-              DeleteRequest: {
-                Key: {
-                  pk: { S: pk },
-                  sk: { S: 'TENANT' },
-                },
-              },
-            },
-          ],
-        },
-      }),
-    );
-  } catch {
-    // ignore
-  }
+/**
+ * Clean up webhook secret mapping.
+ * No-op since meshql-rs handles this internally.
+ */
+export async function cleanupWebhookSecret(config: E2EConfig, webhookSecret: string): Promise<void> {
+  // No-op: meshql-rs data is ephemeral in the test volume
 }
 
-export async function cleanupSSMParams(tenantId: string): Promise<void> {
-  const path = `/dale/tenants/${tenantId}/`;
-
-  try {
-    let nextToken: string | undefined;
-    do {
-      const result = await ssmClient.send(
-        new GetParametersByPathCommand({
-          Path: path,
-          NextToken: nextToken,
-        }),
-      );
-
-      if (result.Parameters) {
-        for (const param of result.Parameters) {
-          if (param.Name) {
-            await ssmClient.send(
-              new DeleteParameterCommand({ Name: param.Name }),
-            );
-          }
-        }
-      }
-
-      nextToken = result.NextToken;
-    } while (nextToken);
-  } catch {
-    // ignore if path doesn't exist
-  }
+/**
+ * Clean up SSM parameters for a tenant.
+ * No-op since SSM is no longer used - secrets are stored in meshql-rs.
+ */
+export async function cleanupSSMParams(config: E2EConfig, tenantId: string): Promise<void> {
+  // No-op: SSM is no longer used
+  // Secrets are now stored in meshql-rs on the Tenant object
 }

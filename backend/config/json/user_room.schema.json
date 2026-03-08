@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "tenant_id": { "type": "string", "minLength": 1 },
+    "room_id": { "type": "string", "minLength": 1 },
+    "telegram_user_id": { "type": "integer" },
+    "telegram_first_name": { "type": "string" },
+    "telegram_username": { "type": "string" },
+    "stripe_customer_id": { "type": "string" },
+    "stripe_subscription_id": { "type": "string" },
+    "paypal_payer_id": { "type": "string" },
+    "paypal_subscription_id": { "type": "string" },
+    "subscription_status": {
+      "type": "string",
+      "enum": ["active", "past_due", "cancelled", "none"]
+    }
+  },
+  "required": ["tenant_id", "room_id", "telegram_user_id", "subscription_status"],
+  "additionalProperties": false
+}

@@ -1,0 +1,23 @@
+type Query {
+  getById(id: ID, at: Float): UserRoom
+  getAll(at: Float): [UserRoom]
+  getByTenantAndUser(tenant_id: String, telegram_user_id: Int, at: Float): [UserRoom]
+  getByTenantUserRoom(tenant_id: String, telegram_user_id: Int, room_id: String, at: Float): UserRoom
+  getByTenantAndRoom(tenant_id: String, room_id: String, at: Float): [UserRoom]
+  getByStripeCustomerId(stripe_customer_id: String, at: Float): UserRoom
+  getByPaypalPayerId(paypal_payer_id: String, at: Float): UserRoom
+}
+
+type UserRoom {
+  id: ID
+  tenant_id: String!
+  room_id: String!
+  telegram_user_id: Int!
+  telegram_first_name: String
+  telegram_username: String
+  stripe_customer_id: String
+  stripe_subscription_id: String
+  paypal_payer_id: String
+  paypal_subscription_id: String
+  subscription_status: String!
+}

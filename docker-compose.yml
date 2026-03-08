@@ -1,0 +1,51 @@
+version: '3.8'
+
+services:
+  meshql-rs:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    environment:
+      - EFS_MOUNT_PATH=/data
+      - RUN_MODE=server
+      - RUST_LOG=info
+    volumes:
+      - meshql-data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -s http://localhost:8080/health || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  dale-api:
+    build:
+      context: .
+      dockerfile: local/Dockerfile
+    ports:
+      - "4000:3000"
+      - "4001:3001"
+      - "4002:3002"
+      - "4003:3003"
+      - "4004:3004"
+    environment:
+      - MESHQL_URL=http://meshql-rs:8080
+      - AWS_REGION=us-east-1
+      - TELEGRAM_WEBHOOK_URL=http://localhost:3001
+      - STRIPE_WEBHOOK_URL=http://localhost:3002
+      - PAYPAL_WEBHOOK_URL=http://localhost:3003
+      - PAYPAL_BASE_URL=https://api-m.sandbox.paypal.com
+      - TELEGRAM_TEST_MODE=true
+      - TELEGRAM_API_BASE_URL=http://localhost:3004
+      - JWT_SECRET=local-test-secret-key-for-development
+      - COGNITO_USER_POOL_ID=local-pool
+    depends_on:
+      meshql-rs:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -s http://localhost:3000/health || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  meshql-data:

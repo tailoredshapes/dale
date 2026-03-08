@@ -92,7 +92,6 @@ describe('PayPal webhook handler', () => {
     const result = await handler(makeEvent(body));
     expect(result.statusCode).toBe(200);
     expect(mockedHandleActivated).toHaveBeenCalledWith(
-      'dale-test-table',
       'tenant-1',
       '123:ABC',
       expect.objectContaining({ event_type: 'BILLING.SUBSCRIPTION.ACTIVATED' }),

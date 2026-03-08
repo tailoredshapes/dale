@@ -8,13 +8,15 @@ import assert from 'node:assert/strict';
 Given<DaleWorld>('I have retrieved the webhook secret', async function () {
   assert.ok(this.tenantIds.length > 0, 'No tenant onboarded');
   const tenantId = this.tenantIds[this.tenantIds.length - 1];
-  const secret = await getSSMParameter(`/dale/tenants/${tenantId}/telegram-webhook-secret`);
+  const secret = await getSSMParameter(`/dale/tenants/${tenantId}/telegram-webhook-secret`, this.config);
   this.webhookSecret = secret;
   this.webhookSecrets.push(secret);
 });
 
 When<DaleWorld>('I simulate the bot being added to group {string}', async function (groupTitle: string) {
   assert.ok(this.webhookSecret, 'No webhook secret available');
+  assert.ok(this.tenantIds.length > 0, 'No tenant onboarded');
+  const tenantId = this.tenantIds[this.tenantIds.length - 1];
   this.telegramGroupId = -(Math.floor(Math.random() * 900000000) + 100000000);
   const payload = buildBotAddedToGroup({
     groupId: this.telegramGroupId,
@@ -24,6 +26,7 @@ When<DaleWorld>('I simulate the bot being added to group {string}', async functi
     this.config.telegramWebhookUrl,
     this.webhookSecret,
     payload,
+    tenantId,
   );
   this.lastResponse = { status: result.status, body: result.body, headers: new Headers() };
 });
@@ -33,6 +36,8 @@ Given<DaleWorld>(
   async function (groupTitle: string) {
     assert.ok(this.webhookSecret, 'No webhook secret available');
     assert.ok(this.idToken, 'No auth token available');
+    assert.ok(this.tenantIds.length > 0, 'No tenant onboarded');
+    const tenantId = this.tenantIds[this.tenantIds.length - 1];
     this.telegramGroupId = -(Math.floor(Math.random() * 900000000) + 100000000);
     const payload = buildBotAddedToGroup({
       groupId: this.telegramGroupId,
@@ -42,17 +47,23 @@ Given<DaleWorld>(
       this.config.telegramWebhookUrl,
       this.webhookSecret,
       payload,
+      tenantId,
     );
     // Wait for async processing
     await new Promise((r) => setTimeout(r, 1000));
-    // Fetch rooms to find the auto-created one
+    // Fetch rooms to find the auto-created one by telegramGroupId
     const response = await apiRequest(`${this.config.adminApiUrl}/api/rooms`, 'GET', {
       token: this.idToken,
     });
     assert.equal(response.status, 200, `List rooms failed: ${JSON.stringify(response.body)}`);
     assert.ok(Array.isArray(response.body), 'Expected rooms array');
     assert.ok(response.body.length > 0, 'Expected at least one room after bot added to group');
-    this.lastRoomId = response.body[response.body.length - 1].roomId;
+    // Find the room we just created by matching the telegramGroupId
+    const createdRoom = response.body.find(
+      (r: any) => String(r.telegramGroupId) === String(this.telegramGroupId),
+    );
+    assert.ok(createdRoom, `Room with telegramGroupId ${this.telegramGroupId} not found`);
+    this.lastRoomId = createdRoom.roomId;
   },
 );
 
@@ -70,12 +81,22 @@ Given<DaleWorld>(
       },
     );
     assert.equal(response.status, 200, `Activate room failed: ${JSON.stringify(response.body)}`);
+
+    // Track as Room A if not already set (for multi-room scenarios)
+    if (!this.roomA) {
+      this.roomA = {
+        roomId: this.lastRoomId,
+        telegramGroupId: this.telegramGroupId!,
+      };
+    }
   },
 );
 
 When<DaleWorld>('a user sends {string} in the group', async function (text: string) {
   assert.ok(this.webhookSecret, 'No webhook secret available');
   assert.ok(this.telegramGroupId, 'No telegram group ID available');
+  assert.ok(this.tenantIds.length > 0, 'No tenant onboarded');
+  const tenantId = this.tenantIds[this.tenantIds.length - 1];
   const payload = buildMessage({
     chatId: this.telegramGroupId,
     chatType: 'supergroup',
@@ -85,12 +106,15 @@ When<DaleWorld>('a user sends {string} in the group', async function (text: stri
     this.config.telegramWebhookUrl,
     this.webhookSecret,
     payload,
+    tenantId,
   );
   this.lastResponse = { status: result.status, body: result.body, headers: new Headers() };
 });
 
 When<DaleWorld>('a user sends {string} as a direct message', async function (text: string) {
   assert.ok(this.webhookSecret, 'No webhook secret available');
+  assert.ok(this.tenantIds.length > 0, 'No tenant onboarded');
+  const tenantId = this.tenantIds[this.tenantIds.length - 1];
   const payload = buildMessage({
     chatId: 111111,
     chatType: 'private',
@@ -100,6 +124,7 @@ When<DaleWorld>('a user sends {string} as a direct message', async function (tex
     this.config.telegramWebhookUrl,
     this.webhookSecret,
     payload,
+    tenantId,
   );
   this.lastResponse = { status: result.status, body: result.body, headers: new Headers() };
 });
@@ -133,13 +158,8 @@ Then<DaleWorld>('the room should have a telegramGroupId', function () {
   assert.ok(room.telegramGroupId !== undefined && room.telegramGroupId !== null, 'Expected telegramGroupId');
 });
 
-Then<DaleWorld>('the room should not be active', function () {
-  assert.ok(this.lastResponse, 'No response recorded');
-  assert.ok(Array.isArray(this.lastResponse.body), 'Expected body to be an array');
-  const room = this.lastResponse.body.find((r: any) => r.roomId === this.lastRoomId);
-  assert.ok(room, 'No room found');
-  assert.equal(room.isActive, false);
-});
+// Note: 'the room should not be active' is defined in admin-rooms-exhaustive.steps.ts
+// and handles both single room (object) and list of rooms (array) responses
 
 When<DaleWorld>("I check the auto-created room's subscribers", async function () {
   assert.ok(this.idToken, 'No auth token available');

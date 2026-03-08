@@ -2,10 +2,19 @@ image: node:20
 
 stages:
   - test
+  - e2e
+  - deploy
+
+variables:
+  GIT_CLEAN_FLAGS: -ffdx -e e2e/node_modules -e node_modules
+
+before_script:
+  - git config --global url."http://oauth2:${GITLAB_TOKEN}@git.tildarc.com/tailoredshapes".insteadOf "https://git.tildarc.com/tailoredshapes"
 
 test-backend:
   stage: test
   script:
+    - docker run --rm -v "$(pwd)/e2e:/e2e" alpine sh -c "rm -rf /e2e/node_modules" 2>/dev/null || true
     - npm ci
     - npm test
   cache:
@@ -26,8 +35,100 @@ synth:
   stage: test
   script:
     - npm ci
+    # Stub backend binary so CDK local bundling succeeds during synth (real build happens in e2e/deploy)
+    - mkdir -p backend/target/release && printf '#!/bin/sh\necho stub' > backend/target/release/dale-backend && chmod +x backend/target/release/dale-backend
+    - cd cdk && npm ci && cd ..
     - npx cdk synth -c env=dev
   cache:
     key: dale-node-${CI_COMMIT_REF_SLUG}
     paths:
       - node_modules/
+
+e2e-local:
+  stage: e2e
+  tags:
+    - shell
+  needs:
+    - test-backend
+    - test-web
+  variables:
+    COMPOSE_PROJECT_NAME: dale-${CI_JOB_ID}
+  before_script:
+    # Kill any leftover dale-work containers from local dev/agent runs that may hold ports
+    - docker compose -p dale-work -f docker-compose.yml down -v 2>/dev/null || true
+    - docker ps -q --filter "name=dale-work" | xargs -r docker rm -f || true
+  script:
+    # Clone meshql-rs dependencies (backend has local path deps)
+    - |
+      PARENT=$(dirname $(pwd))
+      for repo in meshql-rs merkql merksql; do
+        if [ ! -d "$PARENT/tailoredshapes/$repo" ]; then
+          git clone http://oauth2:${GITLAB_TOKEN}@192.168.7.42:8929/tailoredshapes/$repo.git \
+            "$PARENT/tailoredshapes/$repo"
+        fi
+      done
+    # Build meshql-rs backend binary before docker compose (Dockerfile copies pre-built binary)
+    - |
+      cd backend
+      cargo build --release 2>&1 | tail -5
+      cd ..
+    # Start services (isolated by COMPOSE_PROJECT_NAME)
+    - docker compose down -v 2>/dev/null || true
+    - docker compose up -d --build
+
+    # Wait for API to be healthy (service name dale-api, container name is project-prefixed)
+    - |
+      echo "Waiting for dale-api to be healthy..."
+      API_CONTAINER="${COMPOSE_PROJECT_NAME}-dale-api-1"
+      for i in $(seq 1 60); do
+        if docker exec "$API_CONTAINER" curl -sf http://localhost:3000/health > /dev/null 2>&1; then
+          echo "dale-api is healthy"
+          break
+        fi
+        echo "Attempt $i/60 - waiting..."
+        sleep 2
+      done
+
+    # Run E2E tests inside a container on the same network
+    # Use Docker Compose service names for DNS (not container names)
+    - |
+      docker run --rm \
+        --network ${COMPOSE_PROJECT_NAME}_default \
+        -v $(pwd)/e2e:/app/e2e \
+        -w /app/e2e \
+        -e E2E_LOCAL_MODE=true \
+        -e E2E_LOCAL_HOST=dale-api \
+        -e DYNAMODB_ENDPOINT=http://dynamodb-local:8000 \
+        -e SSM_ENDPOINT=http://localstack:4566 \
+        node:20-alpine \
+        sh -c "npm ci && npx cucumber-js --tags 'not @real-telegram and not @cognito-srp and not @tutorial and not @skip'"
+  after_script:
+    - docker compose logs || true
+    - docker compose down -v || true
+
+deploy-prod:
+  stage: deploy
+  tags:
+    - shell
+  only:
+    - main
+  needs:
+    - e2e-local
+  variables:
+    AWS_ACCESS_KEY_ID: $AWS_ACCESS_KEY_ID
+    AWS_SECRET_ACCESS_KEY: $AWS_SECRET_ACCESS_KEY
+    AWS_DEFAULT_REGION: $AWS_DEFAULT_REGION
+  script:
+    - npm ci
+    # Clone meshql-rs deps and build backend binary for Lambda deployment
+    - |
+      PARENT=$(dirname $(pwd))
+      for repo in meshql-rs merkql merksql; do
+        if [ ! -d "$PARENT/tailoredshapes/$repo" ]; then
+          git clone http://oauth2:${GITLAB_TOKEN}@192.168.7.42:8929/tailoredshapes/$repo.git \
+            "$PARENT/tailoredshapes/$repo"
+        fi
+      done
+    - cd backend && cargo build --release && cd ..
+    - cd cdk && npm ci
+    - npx cdk deploy Dale-Prod -c env=prod --require-approval never

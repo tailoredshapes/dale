@@ -1,33 +1,11 @@
-import { GetCommand, PutCommand } from '@aws-sdk/lib-dynamodb';
-import { docClient } from './client.js';
-import type { WebhookSecretMapping } from '../shared/types.js';
+import { getTenantByWebhookSecret } from './tenants.js';
 
-export async function createWebhookSecretMapping(
-  tableName: string,
-  secret: string,
-  tenantId: string,
-): Promise<void> {
-  const now = new Date().toISOString();
-  const item: WebhookSecretMapping = {
-    pk: `WHSECRET#${secret}`,
-    sk: 'TENANT',
-    tenantId,
-    createdAt: now,
-  };
-  await docClient.send(
-    new PutCommand({ TableName: tableName, Item: item }),
-  );
-}
+// Webhook secret lookup now goes through Tenant
+// This module exists for backward compatibility
 
-export async function getTenantByWebhookSecret(
-  tableName: string,
+export async function getTenantIdByWebhookSecret(
   secret: string,
 ): Promise<string | null> {
-  const result = await docClient.send(
-    new GetCommand({
-      TableName: tableName,
-      Key: { pk: `WHSECRET#${secret}`, sk: 'TENANT' },
-    }),
-  );
-  return (result.Item as WebhookSecretMapping)?.tenantId ?? null;
+  const tenant = await getTenantByWebhookSecret(secret);
+  return tenant?.id ?? null;
 }

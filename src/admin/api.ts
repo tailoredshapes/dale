@@ -1,19 +1,14 @@
 import type { APIGatewayProxyEventV2, APIGatewayProxyResultV2 } from 'aws-lambda';
-import { SSMClient, PutParameterCommand } from '@aws-sdk/client-ssm';
 import { getPlatformConfig } from '../shared/config.js';
-import { extractAuthContext, extractCognitoSub } from './middleware/auth.js';
+import { extractAuthContext, extractCognitoSub, registerTenantForSub } from './middleware/auth.js';
 import { handleGetTenant, handleUpdateTenant, handleOnboard, handleConfigurePayment } from './routes/tenant.js';
-import { handleListRooms, handleGetRoom, handleCreateRoom, handleUpdateRoom } from './routes/rooms.js';
+import { handleListRooms, handleGetRoom, handleCreateRoom, handleUpdateRoom, handleDeleteRoom } from './routes/rooms.js';
 import { handleListSubscribers } from './routes/subscribers.js';
 import { handleRegisterWebhook } from './routes/webhooks.js';
 import { handleInviteUser, handleListUsers } from './routes/invite.js';
-import { createWebhookSecretMapping } from '../db/webhook-secrets.js';
 import { setWebhook } from '../telegram/api.js';
 import { registerPayPalWebhook } from '../paypal/client.js';
-import { ulid } from 'ulid';
 import { randomBytes } from 'crypto';
-
-const ssm = new SSMClient({});
 
 function json(result: { statusCode: number; body: string }): APIGatewayProxyResultV2 {
   return {
@@ -21,24 +16,11 @@ function json(result: { statusCode: number; body: string }): APIGatewayProxyResu
     headers: {
       'Content-Type': 'application/json',
       'Access-Control-Allow-Origin': '*',
-      'Access-Control-Allow-Headers': 'Content-Type,Authorization',
+      'Access-Control-Allow-Headers': 'Content-Type,Authorization,X-Webhook-Secret',
       'Access-Control-Allow-Methods': 'GET,POST,PUT,DELETE,OPTIONS',
     },
     body: result.body,
   };
-}
-
-async function storeSecrets(tenantId: string, secrets: Record<string, string>): Promise<void> {
-  for (const [key, value] of Object.entries(secrets)) {
-    await ssm.send(
-      new PutParameterCommand({
-        Name: `/dale/tenants/${tenantId}/${key}`,
-        Value: value,
-        Type: 'SecureString',
-        Overwrite: true,
-      }),
-    );
-  }
 }
 
 export async function handler(
@@ -59,39 +41,46 @@ export async function handler(
     if (!cognitoSub) {
       return json({ statusCode: 401, body: JSON.stringify({ error: 'Unauthorized' }) });
     }
-    return json(
-      await handleOnboard(config.tableName, cognitoSub, event.body ?? '', {
-        generateId: () => ulid(),
-        generateSecret: () => randomBytes(32).toString('hex'),
-        storeSecrets,
-        createWebhookSecretMapping,
-        setWebhook,
-        registerPayPalWebhook,
-        telegramWebhookUrl: config.telegramWebhookUrl,
-        stripeWebhookUrl: config.stripeWebhookUrl,
-        paypalWebhookUrl: config.paypalWebhookUrl,
-        paypalBaseUrl: config.paypalBaseUrl,
-      }),
-    );
+    const onboardResult = await handleOnboard(cognitoSub, event.body ?? '', {
+      generateSecret: () => randomBytes(32).toString('hex'),
+      setWebhook,
+      registerPayPalWebhook,
+      telegramWebhookUrl: config.telegramWebhookUrl,
+      stripeWebhookUrl: config.stripeWebhookUrl,
+      paypalWebhookUrl: config.paypalWebhookUrl,
+      paypalBaseUrl: config.paypalBaseUrl,
+    });
+    // Register sub→tenantId so JWT-authed requests resolve the tenant
+    if (onboardResult.statusCode === 201) {
+      const body = JSON.parse(onboardResult.body);
+      if (body.tenantId) registerTenantForSub(cognitoSub, body.tenantId);
+    }
+    return json(onboardResult);
   }
 
   // All other routes require existing tenant
-  const auth = await extractAuthContext(event, config.tableName);
+  const auth = await extractAuthContext(event);
   if (!auth) {
+    // Check if user is authenticated but just hasn't onboarded
+    const cognitoSub = extractCognitoSub(event);
+    if (cognitoSub) {
+      // User is authenticated but has no tenant - must onboard first
+      return json({ statusCode: 404, body: JSON.stringify({ error: 'Tenant not found. Please onboard first.' }) });
+    }
+    // Not authenticated at all
     return json({ statusCode: 401, body: JSON.stringify({ error: 'Unauthorized' }) });
   }
 
   // Tenant routes
   if (path === '/api/tenant' && method === 'GET') {
-    return json(await handleGetTenant(config.tableName, auth));
+    return json(await handleGetTenant(auth));
   }
   if (path === '/api/tenant' && method === 'PUT') {
-    return json(await handleUpdateTenant(config.tableName, auth, event.body ?? ''));
+    return json(await handleUpdateTenant(auth, event.body ?? ''));
   }
   if (path === '/api/tenant/payment' && method === 'PUT') {
     return json(
       await handleConfigurePayment(auth, event.body ?? '', {
-        storeSecrets,
         registerPayPalWebhook,
         stripeWebhookUrl: config.stripeWebhookUrl,
         paypalWebhookUrl: config.paypalWebhookUrl,
@@ -102,10 +91,10 @@ export async function handler(
 
   // Room routes
   if (path === '/api/rooms' && method === 'GET') {
-    return json(await handleListRooms(config.tableName, auth));
+    return json(await handleListRooms(auth));
   }
   if (path === '/api/rooms' && method === 'POST') {
-    return json(await handleCreateRoom(config.tableName, auth, event.body ?? ''));
+    return json(await handleCreateRoom(auth, event.body ?? ''));
   }
 
   // Room detail routes
@@ -113,17 +102,20 @@ export async function handler(
   if (roomMatch) {
     const roomId = roomMatch[1];
     if (method === 'GET') {
-      return json(await handleGetRoom(config.tableName, auth, roomId));
+      return json(await handleGetRoom(auth, roomId));
     }
     if (method === 'PUT') {
-      return json(await handleUpdateRoom(config.tableName, auth, roomId, event.body ?? ''));
+      return json(await handleUpdateRoom(auth, roomId, event.body ?? ''));
+    }
+    if (method === 'DELETE') {
+      return json(await handleDeleteRoom(auth, roomId));
     }
   }
 
   // Subscriber routes
   const subMatch = path.match(/^\/api\/rooms\/([^/]+)\/subscribers$/);
   if (subMatch && method === 'GET') {
-    return json(await handleListSubscribers(config.tableName, auth, subMatch[1]));
+    return json(await handleListSubscribers(auth, subMatch[1]));
   }
 
   // Webhook registration
