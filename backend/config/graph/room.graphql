@@ -12,6 +12,7 @@ type Room {
   description: String
   telegram_group_id: String
   payment_link: String
+  paypal_payment_link: String
   price_description: String
   active: Boolean!
 }
