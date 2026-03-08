@@ -7,6 +7,8 @@ cdk.out/
 *.js.map
 !vitest.config.ts
 !cdk.json
+!cucumber.js
+!web/*/public/config.js
 cdk-outputs.json
 e2e/node_modules/
 e2e/reports/
