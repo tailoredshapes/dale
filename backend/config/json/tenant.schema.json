@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "display_name": { "type": "string", "minLength": 1 },
+    "telegram_bot_token": { "type": "string" },
+    "webhook_secret": { "type": "string" },
+    "stripe_secret_key": { "type": "string" },
+    "stripe_webhook_secret": { "type": "string" },
+    "paypal_client_id": { "type": "string" },
+    "paypal_client_secret": { "type": "string" },
+    "paypal_webhook_id": { "type": "string" }
+  },
+  "required": ["display_name"],
+  "additionalProperties": false
+}

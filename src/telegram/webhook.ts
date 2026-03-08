@@ -1,5 +1,4 @@
 import type { APIGatewayProxyEventV2, APIGatewayProxyResultV2 } from 'aws-lambda';
-import { getPlatformConfig } from '../shared/config.js';
 import { getTenantIdByWebhookSecret } from '../shared/tenant-lookup.js';
 import { getTenantSecrets } from '../shared/tenant-config.js';
 import { getUserRoom, listUserRooms } from '../db/users.js';
@@ -13,8 +12,6 @@ export async function handler(
   event: APIGatewayProxyEventV2,
 ): Promise<APIGatewayProxyResultV2> {
   try {
-    const config = getPlatformConfig();
-
     // Step 1: Extract webhook secret from header
     const secret = event.headers['x-telegram-bot-api-secret-token'];
     if (!secret) {
@@ -22,7 +19,7 @@ export async function handler(
     }
 
     // Step 2: Look up tenant by webhook secret
-    const tenantId = await getTenantIdByWebhookSecret(config.tableName, secret);
+    const tenantId = await getTenantIdByWebhookSecret(secret);
     if (!tenantId) {
       console.warn('Unknown webhook secret');
       return { statusCode: 200, body: 'ok' };
@@ -48,7 +45,7 @@ export async function handler(
       // Extract bot user ID from the token (first part before ':')
       const botUserId = parseInt(tenantSecrets.telegramBotToken.split(':')[0], 10);
       await handleMyChatMember(
-        { tableName: config.tableName, tenantId, botUserId },
+        { tenantId, botUserId },
         update.my_chat_member,
       );
       return { statusCode: 200, body: 'ok' };
@@ -71,22 +68,22 @@ export async function handler(
     if (command === '/start') {
       if (inGroup) {
         // In a group: show this room's payment link
-        const room = await getRoomByTelegramGroupId(config.tableName, chatId);
+        const room = await getRoomByTelegramGroupId(chatId);
         if (!room) {
           response = 'This group is not linked to a room yet.';
         } else {
-          const userRoom = await getUserRoom(config.tableName, tenantId, telegramUserId, room.roomId);
+          const userRoom = await getUserRoom(tenantId, telegramUserId, room.id);
           response = handleStartGroup(room, userRoom, tenantId, telegramUserId);
         }
       } else {
         // In DM: show all rooms
-        const rooms = await listRoomsForTenant(config.tableName, tenantId);
-        const userRooms = await listUserRooms(config.tableName, tenantId, telegramUserId);
+        const rooms = await listRoomsForTenant(tenantId);
+        const userRooms = await listUserRooms(tenantId, telegramUserId);
         response = handleStartDM(rooms, userRooms, tenantId, telegramUserId);
       }
     } else if (command === '/status') {
-      const rooms = await listRoomsForTenant(config.tableName, tenantId);
-      const userRooms = await listUserRooms(config.tableName, tenantId, telegramUserId);
+      const rooms = await listRoomsForTenant(tenantId);
+      const userRooms = await listUserRooms(tenantId, telegramUserId);
       response = handleStatus(userRooms, rooms);
     } else if (command === '/help') {
       response = handleHelp();

@@ -1,0 +1,17 @@
+type Query {
+  getById(id: ID, at: Float): Tenant
+  getAll(at: Float): [Tenant]
+  getByWebhookSecret(webhook_secret: String, at: Float): Tenant
+}
+
+type Tenant {
+  id: ID
+  display_name: String!
+  telegram_bot_token: String
+  webhook_secret: String
+  stripe_secret_key: String
+  stripe_webhook_secret: String
+  paypal_client_id: String
+  paypal_client_secret: String
+  paypal_webhook_id: String
+}

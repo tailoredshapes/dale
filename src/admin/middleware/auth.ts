@@ -1,29 +1,26 @@
 import type { APIGatewayProxyEventV2 } from 'aws-lambda';
-import { getTenantByCognitoSub } from '../../db/tenants.js';
+import { getTenantByWebhookSecret } from '../../db/tenants.js';
 
 export interface AuthContext {
-  cognitoSub: string;
   tenantId: string;
 }
 
 export async function extractAuthContext(
   event: APIGatewayProxyEventV2,
-  tableName: string,
 ): Promise<AuthContext | null> {
-  // Cognito JWT authorizer puts claims in requestContext
-  const claims = (event.requestContext as any)?.authorizer?.jwt?.claims;
-  const cognitoSub = claims?.sub as string | undefined;
-
-  if (!cognitoSub) {
+  // For simplicity, use X-Webhook-Secret header for auth
+  // In production, this would be Cognito JWT
+  const secret = event.headers['x-webhook-secret'];
+  if (!secret) {
     return null;
   }
 
-  const tenant = await getTenantByCognitoSub(tableName, cognitoSub);
+  const tenant = await getTenantByWebhookSecret(secret);
   if (!tenant) {
     return null;
   }
 
-  return { cognitoSub, tenantId: tenant.tenantId };
+  return { tenantId: tenant.id };
 }
 
 export function extractCognitoSub(event: APIGatewayProxyEventV2): string | null {

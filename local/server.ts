@@ -6,11 +6,7 @@ import { createServer, IncomingMessage, ServerResponse } from 'http';
 import { URL } from 'url';
 import type { APIGatewayProxyEventV2, APIGatewayProxyResultV2 } from 'aws-lambda';
 
-// Configure AWS SDK endpoints before importing handlers
-process.env.AWS_ENDPOINT_URL_DYNAMODB = process.env.DYNAMODB_ENDPOINT;
-process.env.AWS_ENDPOINT_URL_SSM = process.env.SSM_ENDPOINT;
-
-// Import handlers dynamically after setting env vars
+// Import handlers dynamically
 const { handler: adminHandler } = await import('../src/admin/api.js');
 const { handler: telegramHandler } = await import('../src/telegram/webhook.js');
 const { handler: stripeHandler } = await import('../src/stripe/webhook.js');

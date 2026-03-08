@@ -1,12 +1,10 @@
 import * as cdk from 'aws-cdk-lib';
 import * as lambda from 'aws-cdk-lib/aws-lambda-nodejs';
 import * as lambdaBase from 'aws-cdk-lib/aws-lambda';
-import * as iam from 'aws-cdk-lib/aws-iam';
 import * as codedeploy from 'aws-cdk-lib/aws-codedeploy';
 import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
 import * as apigwv2 from 'aws-cdk-lib/aws-apigatewayv2';
 import { HttpLambdaIntegration } from 'aws-cdk-lib/aws-apigatewayv2-integrations';
-import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
 import { Construct } from 'constructs';
 import * as path from 'path';
 import { fileURLToPath } from 'url';
@@ -14,8 +12,7 @@ import { fileURLToPath } from 'url';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 export interface BlueGreenWebhooksProps {
-  table: dynamodb.Table;
-  ssmParamArns: string[];
+  meshqlUrl: string;
   telegramTestMode?: boolean;
   paypalBaseUrl?: string;
   envName: string;
@@ -38,7 +35,7 @@ export class BlueGreenWebhooks extends Construct {
     super(scope, id);
 
     const commonEnv = {
-      TABLE_NAME: props.table.tableName,
+      MESHQL_URL: props.meshqlUrl,
       ...(props.telegramTestMode ? { TELEGRAM_TEST_MODE: 'true' } : {}),
     };
 
@@ -69,8 +66,6 @@ export class BlueGreenWebhooks extends Construct {
       environment: commonEnv,
       bundling: { ...bundling, nodeModules: ['ulid'] },
       application,
-      table: props.table,
-      ssmParamArns: props.ssmParamArns,
     });
 
     // Create Stripe handler with blue/green
@@ -79,8 +74,6 @@ export class BlueGreenWebhooks extends Construct {
       environment: commonEnv,
       bundling: { ...bundling, nodeModules: ['stripe'] },
       application,
-      table: props.table,
-      ssmParamArns: props.ssmParamArns,
     });
 
     // Create PayPal handler with blue/green
@@ -92,8 +85,6 @@ export class BlueGreenWebhooks extends Construct {
       },
       bundling,
       application,
-      table: props.table,
-      ssmParamArns: props.ssmParamArns,
     });
 
     // Add routes using aliases
@@ -128,8 +119,6 @@ export class BlueGreenWebhooks extends Construct {
       environment: Record<string, string>;
       bundling: lambda.BundlingOptions;
       application: codedeploy.LambdaApplication;
-      table: dynamodb.Table;
-      ssmParamArns: string[];
     },
   ): LambdaWithAlias {
     const fn = new lambda.NodejsFunction(this, `${name}Handler`, {
@@ -144,14 +133,6 @@ export class BlueGreenWebhooks extends Construct {
         removalPolicy: cdk.RemovalPolicy.RETAIN,
       },
     });
-
-    opts.table.grantReadWriteData(fn);
-
-    const ssmPolicy = new iam.PolicyStatement({
-      actions: ['ssm:GetParameter', 'ssm:GetParametersByPath'],
-      resources: opts.ssmParamArns,
-    });
-    fn.addToRolePolicy(ssmPolicy);
 
     // Create alias pointing to current version
     const alias = new lambdaBase.Alias(this, `${name}Alias`, {

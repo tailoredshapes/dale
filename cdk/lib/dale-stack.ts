@@ -1,6 +1,6 @@
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
-import { Database } from './constructs/database.js';
+import { MeshqlStorage } from './constructs/meshql-storage.js';
 import { Webhooks } from './constructs/webhooks.js';
 import { BlueGreenWebhooks } from './constructs/blue-green-webhooks.js';
 import { AdminApi } from './constructs/admin-api.js';
@@ -19,13 +19,10 @@ export class DaleStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props: DaleStackProps) {
     super(scope, id, props);
 
-    const ssmParamArns = [
-      `arn:aws:ssm:${this.region}:${this.account}:parameter/dale/*`,
-    ];
-
-    // Database
-    const database = new Database(this, 'Database', {
+    // MeshQL Storage (EFS + meshql-rs Lambda)
+    const storage = new MeshqlStorage(this, 'MeshqlStorage', {
       retainData: props.retainData,
+      envName: props.envName,
     });
 
     // Webhook URLs (set differently based on deployment type)
@@ -36,8 +33,7 @@ export class DaleStack extends cdk.Stack {
     // Webhook Lambdas - use blue/green for prod, function URLs for dev
     if (props.blueGreenDeployment) {
       const blueGreenWebhooks = new BlueGreenWebhooks(this, 'BlueGreenWebhooks', {
-        table: database.table,
-        ssmParamArns,
+        meshqlUrl: storage.meshqlUrl,
         telegramTestMode: props.telegramTestMode,
         paypalBaseUrl: props.paypalBaseUrl,
         envName: props.envName,
@@ -47,8 +43,7 @@ export class DaleStack extends cdk.Stack {
       paypalWebhookUrl = blueGreenWebhooks.paypalUrl;
     } else {
       const webhooks = new Webhooks(this, 'Webhooks', {
-        table: database.table,
-        ssmParamArns,
+        meshqlUrl: storage.meshqlUrl,
         telegramTestMode: props.telegramTestMode,
         paypalBaseUrl: props.paypalBaseUrl,
       });
@@ -71,8 +66,7 @@ export class DaleStack extends cdk.Stack {
 
     // Admin API (Cognito + API Gateway + Lambda)
     const adminApi = new AdminApi(this, 'AdminApi', {
-      table: database.table,
-      ssmParamArns,
+      meshqlUrl: storage.meshqlUrl,
       telegramTestMode: props.telegramTestMode,
       telegramWebhookUrl,
       stripeWebhookUrl,
@@ -148,8 +142,8 @@ export class DaleStack extends cdk.Stack {
       value: webHosting.distribution.distributionId,
     });
 
-    new cdk.CfnOutput(this, 'TableName', {
-      value: database.table.tableName,
+    new cdk.CfnOutput(this, 'MeshqlUrl', {
+      value: storage.meshqlUrl,
     });
   }
 }

@@ -1,150 +1,103 @@
-import { GetCommand, PutCommand, QueryCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
-import { docClient } from './client.js';
+import { graphql, restPost, restPut, restGet } from './client.js';
 import type { Room } from '../shared/types.js';
 
-export async function createRoom(
-  tableName: string,
-  room: Omit<Room, 'pk' | 'sk' | 'GSI1pk' | 'GSI1sk' | 'createdAt' | 'updatedAt'>,
-): Promise<Room> {
-  const now = new Date().toISOString();
-  const item: Room = {
-    pk: `TENANT#${room.tenantId}`,
-    sk: `ROOM#${room.roomId}`,
-    tenantId: room.tenantId,
-    roomId: room.roomId,
-    name: room.name,
-    description: room.description,
-    telegramGroupId: room.telegramGroupId,
-    paymentLink: room.paymentLink,
-    paypalPaymentLink: room.paypalPaymentLink,
-    priceDescription: room.priceDescription,
-    isActive: room.isActive,
-    createdAt: now,
-    updatedAt: now,
-    GSI1pk: room.telegramGroupId ? `TGGROUP#${room.telegramGroupId}` : undefined,
-    GSI1sk: room.telegramGroupId ? 'ROOM' : undefined,
-  };
+interface RoomInput {
+  id: string;
+  tenant_id: string;
+  name: string;
+  description?: string;
+  telegram_group_id?: string;
+  payment_link?: string;
+  paypal_payment_link?: string;
+  price_description?: string;
+  active: boolean;
+}
 
-  await docClient.send(
-    new PutCommand({ TableName: tableName, Item: item }),
-  );
-  return item;
+export async function createRoom(
+  room: RoomInput,
+): Promise<Room> {
+  return restPost<Room>('/room/api', room);
 }
 
 export async function getRoom(
-  tableName: string,
   tenantId: string,
   roomId: string,
 ): Promise<Room | null> {
-  const result = await docClient.send(
-    new GetCommand({
-      TableName: tableName,
-      Key: { pk: `TENANT#${tenantId}`, sk: `ROOM#${roomId}` },
-    }),
-  );
-  return (result.Item as Room) ?? null;
+  // First get by ID, then verify tenant_id matches
+  const room = await restGet<Room>('/room/api', roomId);
+  if (room && room.tenant_id === tenantId) {
+    return room;
+  }
+  return null;
+}
+
+export async function getRoomById(
+  roomId: string,
+): Promise<Room | null> {
+  return restGet<Room>('/room/api', roomId);
 }
 
 export async function listRoomsForTenant(
-  tableName: string,
   tenantId: string,
 ): Promise<Room[]> {
-  const result = await docClient.send(
-    new QueryCommand({
-      TableName: tableName,
-      KeyConditionExpression: 'pk = :pk AND begins_with(sk, :skPrefix)',
-      ExpressionAttributeValues: {
-        ':pk': `TENANT#${tenantId}`,
-        ':skPrefix': 'ROOM#',
-      },
-    }),
+  const query = `
+    query GetByTenantId($tenant_id: String) {
+      getByTenantId(tenant_id: $tenant_id) {
+        id
+        tenant_id
+        name
+        description
+        telegram_group_id
+        payment_link
+        paypal_payment_link
+        price_description
+        active
+      }
+    }
+  `;
+  const result = await graphql<{ getByTenantId: Room[] }>(
+    '/room/graph',
+    query,
+    { tenant_id: tenantId },
   );
-  return (result.Items as Room[]) ?? [];
+  return result.getByTenantId ?? [];
 }
 
 export async function getRoomByTelegramGroupId(
-  tableName: string,
   telegramGroupId: number,
 ): Promise<Room | null> {
-  const result = await docClient.send(
-    new QueryCommand({
-      TableName: tableName,
-      IndexName: 'GSI1',
-      KeyConditionExpression: 'GSI1pk = :pk AND GSI1sk = :sk',
-      ExpressionAttributeValues: {
-        ':pk': `TGGROUP#${telegramGroupId}`,
-        ':sk': 'ROOM',
-      },
-    }),
+  const query = `
+    query GetByTelegramGroupId($telegram_group_id: String) {
+      getByTelegramGroupId(telegram_group_id: $telegram_group_id) {
+        id
+        tenant_id
+        name
+        description
+        telegram_group_id
+        payment_link
+        paypal_payment_link
+        price_description
+        active
+      }
+    }
+  `;
+  const result = await graphql<{ getByTelegramGroupId: Room | null }>(
+    '/room/graph',
+    query,
+    { telegram_group_id: String(telegramGroupId) },
   );
-  return (result.Items?.[0] as Room) ?? null;
+  return result.getByTelegramGroupId;
 }
 
 export async function updateRoom(
-  tableName: string,
   tenantId: string,
   roomId: string,
-  updates: {
-    name?: string;
-    description?: string;
-    telegramGroupId?: number;
-    paymentLink?: string;
-    paypalPaymentLink?: string;
-    priceDescription?: string;
-    isActive?: boolean;
-  },
-): Promise<void> {
-  const expressionParts: string[] = ['#updatedAt = :updatedAt'];
-  const names: Record<string, string> = { '#updatedAt': 'updatedAt' };
-  const values: Record<string, unknown> = { ':updatedAt': new Date().toISOString() };
-
-  if (updates.name !== undefined) {
-    expressionParts.push('#name = :name');
-    names['#name'] = 'name';
-    values[':name'] = updates.name;
+  updates: Partial<Omit<RoomInput, 'id' | 'tenant_id'>>,
+): Promise<Room> {
+  // Verify tenant owns the room first
+  const existing = await getRoom(tenantId, roomId);
+  if (!existing) {
+    throw new Error(`Room ${roomId} not found for tenant ${tenantId}`);
   }
-  if (updates.description !== undefined) {
-    expressionParts.push('#description = :description');
-    names['#description'] = 'description';
-    values[':description'] = updates.description;
-  }
-  if (updates.telegramGroupId !== undefined) {
-    expressionParts.push('#telegramGroupId = :telegramGroupId');
-    names['#telegramGroupId'] = 'telegramGroupId';
-    values[':telegramGroupId'] = updates.telegramGroupId;
-    expressionParts.push('GSI1pk = :gsi1pk');
-    values[':gsi1pk'] = `TGGROUP#${updates.telegramGroupId}`;
-    expressionParts.push('GSI1sk = :gsi1sk');
-    values[':gsi1sk'] = 'ROOM';
-  }
-  if (updates.paymentLink !== undefined) {
-    expressionParts.push('#paymentLink = :paymentLink');
-    names['#paymentLink'] = 'paymentLink';
-    values[':paymentLink'] = updates.paymentLink;
-  }
-  if (updates.paypalPaymentLink !== undefined) {
-    expressionParts.push('#paypalPaymentLink = :paypalPaymentLink');
-    names['#paypalPaymentLink'] = 'paypalPaymentLink';
-    values[':paypalPaymentLink'] = updates.paypalPaymentLink;
-  }
-  if (updates.priceDescription !== undefined) {
-    expressionParts.push('#priceDescription = :priceDescription');
-    names['#priceDescription'] = 'priceDescription';
-    values[':priceDescription'] = updates.priceDescription;
-  }
-  if (updates.isActive !== undefined) {
-    expressionParts.push('#isActive = :isActive');
-    names['#isActive'] = 'isActive';
-    values[':isActive'] = updates.isActive;
-  }
-
-  await docClient.send(
-    new UpdateCommand({
-      TableName: tableName,
-      Key: { pk: `TENANT#${tenantId}`, sk: `ROOM#${roomId}` },
-      UpdateExpression: `SET ${expressionParts.join(', ')}`,
-      ExpressionAttributeNames: names,
-      ExpressionAttributeValues: values,
-    }),
-  );
+  return restPut<Room>('/room/api', roomId, updates);
 }

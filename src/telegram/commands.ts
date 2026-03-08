@@ -12,24 +12,24 @@ export function handleStartDM(
 
   const activeRoomIds = new Set(
     userRooms
-      .filter((ur) => ur.subscriptionStatus === 'active')
-      .map((ur) => ur.roomId),
+      .filter((ur) => ur.subscription_status === 'active')
+      .map((ur) => ur.room_id),
   );
 
   const lines = ["Hey! \u{1F44B} Here's what you can join:\n"];
   for (const room of rooms) {
-    if (!room.isActive) continue;
-    if (activeRoomIds.has(room.roomId)) {
+    if (!room.active) continue;
+    if (activeRoomIds.has(room.id)) {
       lines.push(`\u2705 *${room.name}* \u2014 You're in!`);
     } else {
-      const ref = `${tenantId}:${telegramUserId}:${room.roomId}`;
-      const desc = room.priceDescription ? ` (${room.priceDescription})` : '';
+      const ref = `${tenantId}:${telegramUserId}:${room.id}`;
+      const desc = room.price_description ? ` (${room.price_description})` : '';
       const links: string[] = [];
-      if (room.paymentLink) {
-        links.push(`[Pay with card](${room.paymentLink}?client_reference_id=${ref})`);
+      if (room.payment_link) {
+        links.push(`[Pay with card](${room.payment_link}?client_reference_id=${ref})`);
       }
-      if (room.paypalPaymentLink) {
-        links.push(`[Pay with PayPal](${room.paypalPaymentLink}&custom_id=${ref})`);
+      if (room.paypal_payment_link) {
+        links.push(`[Pay with PayPal](${room.paypal_payment_link}&custom_id=${ref})`);
       }
       lines.push(`\u{1F512} *${room.name}*${desc}\n${links.join(' \u00B7 ')}`);
     }
@@ -43,16 +43,16 @@ export function handleStartGroup(
   tenantId: string,
   telegramUserId: number,
 ): string {
-  if (userRoom && userRoom.subscriptionStatus === 'active') {
+  if (userRoom && userRoom.subscription_status === 'active') {
     return `Welcome back to *${room.name}*! Your subscription is active.`;
   }
-  const ref = `${tenantId}:${telegramUserId}:${room.roomId}`;
+  const ref = `${tenantId}:${telegramUserId}:${room.id}`;
   const links: string[] = [];
-  if (room.paymentLink) {
-    links.push(`[Pay with card](${room.paymentLink}?client_reference_id=${ref})`);
+  if (room.payment_link) {
+    links.push(`[Pay with card](${room.payment_link}?client_reference_id=${ref})`);
   }
-  if (room.paypalPaymentLink) {
-    links.push(`[Pay with PayPal](${room.paypalPaymentLink}&custom_id=${ref})`);
+  if (room.paypal_payment_link) {
+    links.push(`[Pay with PayPal](${room.paypal_payment_link}&custom_id=${ref})`);
   }
   return `Welcome to *${room.name}*! Subscribe here to get access:\n${links.join(' \u00B7 ')}`;
 }
@@ -62,18 +62,18 @@ export function handleStatus(userRooms: UserRoom[], rooms: Room[]): string {
     return 'You do not have any subscriptions yet. Use /start to see available groups.';
   }
 
-  const roomMap = new Map(rooms.map((r) => [r.roomId, r]));
+  const roomMap = new Map(rooms.map((r) => [r.id, r]));
   const lines = ['*Your subscriptions:*\n'];
   for (const ur of userRooms) {
-    const room = roomMap.get(ur.roomId);
-    const name = room?.name ?? ur.roomId;
+    const room = roomMap.get(ur.room_id);
+    const name = room?.name ?? ur.room_id;
     const statusLabel: Record<string, string> = {
       active: '\u2705 active',
       past_due: '\u26A0\uFE0F past due',
       cancelled: '\u274C cancelled',
       none: '\u2014 none',
     };
-    lines.push(`${name}: ${statusLabel[ur.subscriptionStatus] ?? ur.subscriptionStatus}`);
+    lines.push(`${name}: ${statusLabel[ur.subscription_status] ?? ur.subscription_status}`);
   }
   return lines.join('\n');
 }

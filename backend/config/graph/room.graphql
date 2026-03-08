@@ -1,0 +1,17 @@
+type Query {
+  getById(id: ID, at: Float): Room
+  getAll(at: Float): [Room]
+  getByTenantId(tenant_id: String, at: Float): [Room]
+  getByTelegramGroupId(telegram_group_id: String, at: Float): Room
+}
+
+type Room {
+  id: ID
+  tenant_id: String!
+  name: String!
+  description: String
+  telegram_group_id: String
+  payment_link: String
+  price_description: String
+  active: Boolean!
+}

@@ -1,40 +1,29 @@
 version: '3.8'
 
 services:
-  dynamodb-local:
-    image: amazon/dynamodb-local:latest
-    command: "-jar DynamoDBLocal.jar -sharedDb -inMemory"
-    healthcheck:
-      test: ["CMD-SHELL", "curl -s http://localhost:8000 || exit 1"]
-      interval: 5s
-      timeout: 5s
-      retries: 5
-
-  localstack:
-    image: localstack/localstack:3.0
+  meshql-rs:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
     environment:
-      - SERVICES=ssm
-      - DEBUG=0
+      - EFS_MOUNT_PATH=/data
+      - RUN_MODE=server
+      - RUST_LOG=info
     volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
+      - meshql-data:/data
     healthcheck:
-      test: ["CMD-SHELL", "curl -sf http://localhost:4566/_localstack/health | grep -q available || exit 1"]
+      test: ["CMD-SHELL", "curl -s http://localhost:8080/health || exit 1"]
       interval: 5s
       timeout: 5s
-      retries: 15
-      start_period: 20s
+      retries: 10
 
   dale-api:
     build:
       context: .
       dockerfile: local/Dockerfile
     environment:
-      - TABLE_NAME=dale-local
+      - MESHQL_URL=http://meshql-rs:8080
       - AWS_REGION=us-east-1
-      - AWS_ACCESS_KEY_ID=local
-      - AWS_SECRET_ACCESS_KEY=local
-      - DYNAMODB_ENDPOINT=http://dynamodb-local:8000
-      - SSM_ENDPOINT=https://localstack:4566
       - TELEGRAM_WEBHOOK_URL=http://localhost:3001
       - STRIPE_WEBHOOK_URL=http://localhost:3002
       - PAYPAL_WEBHOOK_URL=http://localhost:3003
@@ -44,9 +33,7 @@ services:
       - JWT_SECRET=local-test-secret-key-for-development
       - COGNITO_USER_POOL_ID=local-pool
     depends_on:
-      dynamodb-local:
-        condition: service_healthy
-      localstack:
+      meshql-rs:
         condition: service_healthy
     healthcheck:
       test: ["CMD-SHELL", "curl -s http://localhost:3000/health || exit 1"]
@@ -54,22 +41,5 @@ services:
       timeout: 5s
       retries: 10
 
-  setup:
-    build:
-      context: .
-      dockerfile: local/Dockerfile
-    command: ["node_modules/.bin/tsx", "local/setup.ts"]
-    environment:
-      - TABLE_NAME=dale-local
-      - AWS_REGION=us-east-1
-      - AWS_ACCESS_KEY_ID=local
-      - AWS_SECRET_ACCESS_KEY=local
-      - DYNAMODB_ENDPOINT=http://dynamodb-local:8000
-      - SSM_ENDPOINT=https://localstack:4566
-    depends_on:
-      dynamodb-local:
-        condition: service_healthy
-      localstack:
-        condition: service_healthy
-
-volumes: {}
+volumes:
+  meshql-data:

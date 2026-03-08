@@ -1,107 +1,68 @@
-import { QueryCommand, TransactWriteCommand } from '@aws-sdk/lib-dynamodb';
-import { docClient } from './client.js';
-import type { PayPalMapping, UserProfile, UserRoom } from '../shared/types.js';
+import { graphql, restPost } from './client.js';
+import type { UserRoom } from '../shared/types.js';
+import { v4 as uuidv4 } from 'uuid';
+
+interface UserRoomWithPayPal {
+  id: string;
+  tenant_id: string;
+  room_id: string;
+  telegram_user_id: number;
+  paypal_payer_id: string;
+  paypal_subscription_id: string;
+  subscription_status: 'active' | 'past_due' | 'cancelled' | 'none';
+}
 
 export async function getTenantByPayPalPayer(
-  tableName: string,
   paypalPayerId: string,
-): Promise<PayPalMapping | null> {
-  const result = await docClient.send(
-    new QueryCommand({
-      TableName: tableName,
-      IndexName: 'GSI1',
-      KeyConditionExpression: 'GSI1pk = :pk',
-      ExpressionAttributeValues: {
-        ':pk': `PAYPALCUST#${paypalPayerId}`,
-      },
-    }),
+): Promise<{ tenant_id: string; telegram_user_id: number } | null> {
+  const query = `
+    query GetByPaypalPayerId($paypal_payer_id: String) {
+      getByPaypalPayerId(paypal_payer_id: $paypal_payer_id) {
+        id
+        tenant_id
+        telegram_user_id
+        paypal_payer_id
+      }
+    }
+  `;
+  const result = await graphql<{ getByPaypalPayerId: UserRoom | null }>(
+    '/user_room/graph',
+    query,
+    { paypal_payer_id: paypalPayerId },
   );
-  return (result.Items?.[0] as PayPalMapping) ?? null;
+
+  if (result.getByPaypalPayerId) {
+    return {
+      tenant_id: result.getByPaypalPayerId.tenant_id,
+      telegram_user_id: result.getByPaypalPayerId.telegram_user_id,
+    };
+  }
+  return null;
 }
 
 export async function createPayPalUserRoomMapping(
-  tableName: string,
   tenantId: string,
   telegramUserId: number,
   roomId: string,
   paypalPayerId: string,
   paypalSubscriptionId: string,
+  firstName?: string,
+  username?: string,
 ): Promise<void> {
-  const now = new Date().toISOString();
-
-  const userProfile: UserProfile = {
-    pk: `TENANT#${tenantId}`,
-    sk: `USER#${telegramUserId}`,
-    tenantId,
-    telegramUserId,
-    createdAt: now,
-    updatedAt: now,
+  const userRoom: UserRoomWithPayPal = {
+    id: uuidv4(),
+    tenant_id: tenantId,
+    room_id: roomId,
+    telegram_user_id: telegramUserId,
+    paypal_payer_id: paypalPayerId,
+    paypal_subscription_id: paypalSubscriptionId,
+    subscription_status: 'active',
   };
 
-  const userRoom: UserRoom = {
-    pk: `TENANT#${tenantId}`,
-    sk: `USERROOM#${telegramUserId}#ROOM#${roomId}`,
-    tenantId,
-    telegramUserId,
-    roomId,
-    subscriptionStatus: 'active',
-    paypalPayerId,
-    paypalSubscriptionId,
-    createdAt: now,
-    updatedAt: now,
-    GSI1pk: `TGUSER#${telegramUserId}`,
-    GSI1sk: `TENANT#${tenantId}#ROOM#${roomId}`,
-  };
+  // Add optional fields
+  const data: Record<string, unknown> = { ...userRoom };
+  if (firstName) data.telegram_first_name = firstName;
+  if (username) data.telegram_username = username;
 
-  const paypalMapping: PayPalMapping = {
-    pk: `TENANT#${tenantId}`,
-    sk: `PAYPALCUST#${paypalPayerId}`,
-    tenantId,
-    paypalPayerId,
-    telegramUserId,
-    createdAt: now,
-    GSI1pk: `PAYPALCUST#${paypalPayerId}`,
-    GSI1sk: `TENANT#${tenantId}`,
-  };
-
-  await docClient.send(
-    new TransactWriteCommand({
-      TransactItems: [
-        {
-          Put: {
-            TableName: tableName,
-            Item: userProfile,
-            ConditionExpression: 'attribute_not_exists(pk)',
-          },
-        },
-        {
-          Put: {
-            TableName: tableName,
-            Item: userRoom,
-          },
-        },
-        {
-          Put: {
-            TableName: tableName,
-            Item: paypalMapping,
-          },
-        },
-      ],
-    }),
-  ).catch(async (err) => {
-    // If user profile already exists, retry without the condition
-    if (err.name === 'TransactionCanceledException') {
-      await docClient.send(
-        new TransactWriteCommand({
-          TransactItems: [
-            { Put: { TableName: tableName, Item: userProfile } },
-            { Put: { TableName: tableName, Item: userRoom } },
-            { Put: { TableName: tableName, Item: paypalMapping } },
-          ],
-        }),
-      );
-      return;
-    }
-    throw err;
-  });
+  await restPost<UserRoom>('/user_room/api', data);
 }
