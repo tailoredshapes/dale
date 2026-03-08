@@ -5,6 +5,9 @@ stages:
   - e2e
   - deploy
 
+variables:
+  GIT_CLEAN_FLAGS: -ffdx -e e2e/node_modules -e node_modules
+
 before_script:
   - git config --global url."http://oauth2:${GITLAB_TOKEN}@git.tildarc.com/tailoredshapes".insteadOf "https://git.tildarc.com/tailoredshapes"
 
