@@ -28,8 +28,9 @@ export async function handler(
     try {
       tenantSecrets = await getTenantSecrets(tenantId);
     } catch (err) {
+      // Return 401 for security - don't reveal whether tenant exists
       console.error(`Failed to load secrets for tenant ${tenantId}:`, err);
-      return { statusCode: 500, body: 'Tenant configuration error' };
+      return { statusCode: 401, body: 'Invalid tenant or configuration' };
     }
 
     // Step 4: Validate the webhook secret matches the specified tenant's secret

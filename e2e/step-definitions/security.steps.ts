@@ -137,6 +137,27 @@ When<DaleWorld>(
   },
 );
 When<DaleWorld>(
+  'I send a POST to the Telegram webhook with secret {string}',
+  async function (secret: string) {
+    const tenantId = this.tenantIds.length > 0 ? this.tenantIds[0] : 'test-tenant';
+    const response = await fetch(`${this.config.telegramWebhookUrl}?tenant=${tenantId}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-telegram-bot-api-secret-token': secret,
+      },
+      body: JSON.stringify({ update_id: 1 }),
+    });
+
+    this.lastResponse = {
+      status: response.status,
+      body: await response.text(),
+      headers: response.headers,
+    };
+  },
+);
+
+When<DaleWorld>(
   'I send a POST to the Stripe webhook with tenant {string} and no signature',
   async function (tenant: string) {
     const url = `${this.config.stripeWebhookUrl}?tenant=${tenant}`;

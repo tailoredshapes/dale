@@ -261,6 +261,13 @@ describe('handleCreateRoom', () => {
 
 describe('handleUpdateRoom', () => {
   it('updates room name (E2E: Update room name)', async () => {
+    mockedGetRoom.mockResolvedValue({
+      id: 'r1',
+      tenant_id: 'tenant-1',
+      name: 'Old Name',
+      payment_link: 'https://pay',
+      active: true,
+    });
     mockedUpdateRoom.mockResolvedValue({
       id: 'r1',
       tenant_id: 'tenant-1',
@@ -277,6 +284,13 @@ describe('handleUpdateRoom', () => {
   });
 
   it('updates room with payment link and activates it (E2E: Update room payment link activates it)', async () => {
+    mockedGetRoom.mockResolvedValue({
+      id: 'r1',
+      tenant_id: 'tenant-1',
+      name: 'Inactive Room',
+      payment_link: '',
+      active: false,
+    });
     mockedUpdateRoom.mockResolvedValue({
       id: 'r1',
       tenant_id: 'tenant-1',
@@ -298,6 +312,13 @@ describe('handleUpdateRoom', () => {
   });
 
   it('updates all room fields', async () => {
+    mockedGetRoom.mockResolvedValue({
+      id: 'r1',
+      tenant_id: 'tenant-1',
+      name: 'Original',
+      payment_link: 'https://pay',
+      active: true,
+    });
     mockedUpdateRoom.mockResolvedValue({
       id: 'r1',
       tenant_id: 'tenant-1',
@@ -326,8 +347,22 @@ describe('handleUpdateRoom', () => {
   });
 
   it('returns 400 for invalid JSON', async () => {
+    mockedGetRoom.mockResolvedValue({
+      id: 'r1',
+      tenant_id: 'tenant-1',
+      name: 'Room',
+      payment_link: 'https://pay',
+      active: true,
+    });
     const result = await handleUpdateRoom(AUTH, 'r1', 'bad');
     expect(result.statusCode).toBe(400);
+  });
+
+  it('returns 404 when room not found (E2E: Tenant B cannot PUT Tenant A room)', async () => {
+    mockedGetRoom.mockResolvedValue(null);
+    const result = await handleUpdateRoom(AUTH, 'tenant-a-room', JSON.stringify({ name: 'Hijacked' }));
+    expect(result.statusCode).toBe(404);
+    expect(mockedUpdateRoom).not.toHaveBeenCalled();
   });
 });
 

@@ -83,6 +83,12 @@ export async function handleUpdateRoom(
   roomId: string,
   body: string,
 ): Promise<{ statusCode: number; body: string }> {
+  // Check room exists and belongs to this tenant
+  const room = await getRoom(auth.tenantId, roomId);
+  if (!room) {
+    return { statusCode: 404, body: JSON.stringify({ error: 'Room not found' }) };
+  }
+
   let parsed: { name?: string; description?: string; paymentLink?: string; paypalPaymentLink?: string; priceDescription?: string; isActive?: boolean };
   try {
     parsed = JSON.parse(body);
