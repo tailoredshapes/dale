@@ -61,7 +61,7 @@ services:
     build:
       context: .
       dockerfile: local/Dockerfile
-    command: ["npx", "tsx", "local/setup.ts"]
+    command: ["node_modules/.bin/tsx", "local/setup.ts"]
     environment:
       - TABLE_NAME=dale-local
       - AWS_REGION=us-east-1
