@@ -5,11 +5,6 @@ import { MESHQL_URL } from '../client.js';
 const mockFetch = vi.fn();
 vi.stubGlobal('fetch', mockFetch);
 
-// Mock uuid
-vi.mock('uuid', () => ({
-  v4: () => 'mock-uuid-5678',
-}));
-
 beforeEach(() => {
   mockFetch.mockReset();
 });
@@ -60,9 +55,10 @@ describe('getTenantByPayPalPayer', () => {
 });
 
 describe('createPayPalUserRoomMapping', () => {
-  it('creates user room via REST POST with paypal fields', async () => {
+  it('creates user room via REST POST with paypal fields (no id field)', async () => {
+    // Meshql-rs restlette generates the ID
     const created = {
-      id: 'mock-uuid-5678',
+      id: 'meshql-generated-uuid',
       tenant_id: 't1',
       room_id: 'r1',
       telegram_user_id: 123,
@@ -86,6 +82,8 @@ describe('createPayPalUserRoomMapping', () => {
     );
 
     const body = JSON.parse(mockFetch.mock.calls[0][1].body);
+    // No id field should be sent
+    expect(body.id).toBeUndefined();
     expect(body.tenant_id).toBe('t1');
     expect(body.room_id).toBe('r1');
     expect(body.telegram_user_id).toBe(123);

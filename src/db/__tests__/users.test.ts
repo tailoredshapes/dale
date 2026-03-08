@@ -172,22 +172,28 @@ describe('updateUserRoomStatus', () => {
 });
 
 describe('createUserRoom', () => {
-  it('creates user room via REST POST', async () => {
-    const userRoom = {
-      id: 'ur-new',
+  it('creates user room via REST POST (no id field)', async () => {
+    // Input without id - meshql-rs will generate one
+    const input = {
       tenant_id: 't1',
       room_id: 'r1',
       telegram_user_id: 123,
       subscription_status: 'active' as const,
     };
 
+    // Response includes meshql-generated id
+    const created = {
+      id: 'meshql-generated-id',
+      ...input,
+    };
+
     mockFetch.mockResolvedValueOnce({
       ok: true,
-      json: async () => userRoom,
+      json: async () => created,
     });
 
-    const result = await createUserRoom(userRoom);
-    expect(result).toEqual(userRoom);
+    const result = await createUserRoom(input);
+    expect(result).toEqual(created);
 
     expect(mockFetch).toHaveBeenCalledWith(
       `${MESHQL_URL}/user_room/api`,

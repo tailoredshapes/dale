@@ -1,9 +1,7 @@
 import { graphql, restPost } from './client.js';
 import type { UserRoom } from '../shared/types.js';
-import { v4 as uuidv4 } from 'uuid';
 
 interface UserRoomWithPayPal {
-  id: string;
   tenant_id: string;
   room_id: string;
   telegram_user_id: number;
@@ -49,8 +47,8 @@ export async function createPayPalUserRoomMapping(
   firstName?: string,
   username?: string,
 ): Promise<void> {
+  // Let meshql-rs restlette generate the ID
   const userRoom: UserRoomWithPayPal = {
-    id: uuidv4(),
     tenant_id: tenantId,
     room_id: roomId,
     telegram_user_id: telegramUserId,

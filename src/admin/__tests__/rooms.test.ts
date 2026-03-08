@@ -1,14 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 vi.mock('../../db/rooms.js', () => ({
-  createRoom: vi.fn().mockImplementation(async (room) => ({ ...room })),
+  // createRoom returns the room with a meshql-rs generated ID
+  createRoom: vi.fn().mockImplementation(async (room) => ({ id: 'meshql-room-uuid', ...room })),
   getRoom: vi.fn(),
   listRoomsForTenant: vi.fn(),
   updateRoom: vi.fn(),
-}));
-
-vi.mock('ulid', () => ({
-  ulid: vi.fn().mockReturnValue('01ROOM'),
 }));
 
 import { handleListRooms, handleGetRoom, handleCreateRoom, handleUpdateRoom } from '../routes/rooms.js';
@@ -67,9 +64,9 @@ describe('handleGetRoom', () => {
 });
 
 describe('handleCreateRoom', () => {
-  it('creates room with Stripe link and returns roomId', async () => {
+  it('creates room with Stripe link and returns roomId from restlette', async () => {
     mockedCreateRoom.mockResolvedValue({
-      id: '01ROOM',
+      id: 'meshql-room-uuid',
       tenant_id: 'tenant-1',
       name: 'New Room',
       payment_link: 'https://pay',
@@ -82,12 +79,13 @@ describe('handleCreateRoom', () => {
     }));
     expect(result.statusCode).toBe(201);
     const body = JSON.parse(result.body);
-    expect(body.roomId).toBe('01ROOM');
+    // Should use the ID returned from createRoom (meshql-rs generated)
+    expect(body.roomId).toBe('meshql-room-uuid');
   });
 
   it('creates room with PayPal link only', async () => {
     mockedCreateRoom.mockResolvedValue({
-      id: '01ROOM',
+      id: 'meshql-paypal-room',
       tenant_id: 'tenant-1',
       name: 'PayPal Room',
       payment_link: '',
@@ -104,7 +102,7 @@ describe('handleCreateRoom', () => {
 
   it('creates room with both links', async () => {
     mockedCreateRoom.mockResolvedValue({
-      id: '01ROOM',
+      id: 'meshql-both-room',
       tenant_id: 'tenant-1',
       name: 'Both Room',
       payment_link: 'https://stripe-pay',

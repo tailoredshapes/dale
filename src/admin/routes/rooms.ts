@@ -1,6 +1,5 @@
 import { createRoom, getRoom, listRoomsForTenant, updateRoom } from '../../db/rooms.js';
 import type { AuthContext } from '../middleware/auth.js';
-import { ulid } from 'ulid';
 
 export async function handleListRooms(
   auth: AuthContext,
@@ -59,8 +58,8 @@ export async function handleCreateRoom(
     return { statusCode: 400, body: JSON.stringify({ error: 'Missing required fields: name and at least one payment link' }) };
   }
 
+  // Let meshql-rs restlette generate the ID
   const room = await createRoom({
-    id: ulid(),
     tenant_id: auth.tenantId,
     name: parsed.name,
     description: parsed.description,

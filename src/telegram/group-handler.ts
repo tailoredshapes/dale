@@ -1,6 +1,5 @@
 import type { TelegramChatMemberUpdated } from '../shared/types.js';
 import { createRoom } from '../db/rooms.js';
-import { ulid } from 'ulid';
 
 export interface GroupHandlerContext {
   tenantId: string;
@@ -22,8 +21,8 @@ export async function handleMyChatMember(
     // Bot was added to a group — auto-create a room record
     console.log(`Bot added to group ${chatId} (${chatTitle}) for tenant ${ctx.tenantId}`);
     try {
+      // Let meshql-rs restlette generate the ID
       await createRoom({
-        id: ulid(),
         tenant_id: ctx.tenantId,
         name: chatTitle,
         telegram_group_id: String(chatId),

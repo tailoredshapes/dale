@@ -1,11 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 vi.mock('../../db/rooms.js', () => ({
-  createRoom: vi.fn(),
-}));
-
-vi.mock('ulid', () => ({
-  ulid: vi.fn().mockReturnValue('01TEST'),
+  // createRoom returns the room with a meshql-rs generated ID
+  createRoom: vi.fn().mockResolvedValue({ id: 'meshql-room-uuid' }),
 }));
 
 import { handleMyChatMember } from '../group-handler.js';
@@ -32,8 +29,8 @@ describe('handleMyChatMember', () => {
 
     await handleMyChatMember(ctx, update);
 
+    // No id field - let meshql-rs restlette generate it
     expect(mockedCreateRoom).toHaveBeenCalledWith({
-      id: '01TEST',
       tenant_id: 'tenant-1',
       name: 'My Group',
       telegram_group_id: '-100999',

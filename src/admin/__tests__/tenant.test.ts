@@ -17,7 +17,6 @@ const AUTH = { tenantId: 'tenant-1' };
 
 function makeDeps(overrides: Record<string, unknown> = {}) {
   return {
-    generateId: () => 'new-tenant-id',
     generateSecret: () => 'webhook-secret',
     setWebhook: vi.fn().mockResolvedValue(true),
     registerPayPalWebhook: vi.fn().mockResolvedValue('WH-auto-123'),
@@ -73,10 +72,11 @@ describe('handleUpdateTenant', () => {
 });
 
 describe('handleOnboard', () => {
-  it('creates tenant with Stripe and returns tenantId', async () => {
+  it('creates tenant with Stripe and returns tenantId from restlette', async () => {
     const deps = makeDeps();
+    // createTenant returns the tenant with meshql-rs generated ID
     mockedCreateTenant.mockResolvedValue({
-      id: 'new-tenant-id',
+      id: 'meshql-uuid-1234',
       display_name: 'New Creator',
     });
 
@@ -89,13 +89,14 @@ describe('handleOnboard', () => {
 
     expect(result.statusCode).toBe(201);
     const body = JSON.parse(result.body);
-    expect(body.tenantId).toBe('new-tenant-id');
+    // Should use the ID returned from createTenant (meshql-rs generated)
+    expect(body.tenantId).toBe('meshql-uuid-1234');
     expect(body.webhookRegistered).toBe(true);
-    expect(body.stripeWebhookUrl).toBe('https://stripe.example.com?tenant=new-tenant-id');
+    expect(body.stripeWebhookUrl).toBe('https://stripe.example.com?tenant=meshql-uuid-1234');
     expect(body.paypalWebhookUrl).toBeUndefined();
 
+    // No id field should be passed to createTenant
     expect(mockedCreateTenant).toHaveBeenCalledWith({
-      id: 'new-tenant-id',
       display_name: 'New Creator',
       telegram_bot_token: '123:ABC',
       webhook_secret: 'webhook-secret',
@@ -103,16 +104,15 @@ describe('handleOnboard', () => {
       stripe_webhook_secret: 'whsec_test',
       paypal_client_id: undefined,
       paypal_client_secret: undefined,
-      paypal_webhook_id: undefined,
     });
 
     expect(deps.registerPayPalWebhook).not.toHaveBeenCalled();
   });
 
-  it('creates tenant with PayPal only (auto-registers webhook)', async () => {
+  it('creates tenant with PayPal only (registers webhook after tenant creation)', async () => {
     const deps = makeDeps();
     mockedCreateTenant.mockResolvedValue({
-      id: 'new-tenant-id',
+      id: 'meshql-uuid-5678',
       display_name: 'PayPal Creator',
     });
 
@@ -125,15 +125,16 @@ describe('handleOnboard', () => {
 
     expect(result.statusCode).toBe(201);
     const body = JSON.parse(result.body);
-    expect(body.tenantId).toBe('new-tenant-id');
-    expect(body.paypalWebhookUrl).toBe('https://paypal.example.com?tenant=new-tenant-id');
+    expect(body.tenantId).toBe('meshql-uuid-5678');
+    expect(body.paypalWebhookUrl).toBe('https://paypal.example.com?tenant=meshql-uuid-5678');
     expect(body.stripeWebhookUrl).toBeUndefined();
 
+    // PayPal webhook registered after tenant creation with real meshql ID
     expect(deps.registerPayPalWebhook).toHaveBeenCalledWith(
       'https://api-m.sandbox.paypal.com',
       'pp-client',
       'pp-secret',
-      'https://paypal.example.com?tenant=new-tenant-id',
+      'https://paypal.example.com?tenant=meshql-uuid-5678',
       [
         'BILLING.SUBSCRIPTION.ACTIVATED',
         'BILLING.SUBSCRIPTION.CANCELLED',
@@ -142,12 +143,15 @@ describe('handleOnboard', () => {
         'PAYMENT.SALE.DENIED',
       ],
     );
+
+    // Tenant updated with PayPal webhook ID
+    expect(mockedUpdateTenant).toHaveBeenCalledWith('meshql-uuid-5678', { paypal_webhook_id: 'WH-auto-123' });
   });
 
   it('creates tenant with both providers', async () => {
     const deps = makeDeps();
     mockedCreateTenant.mockResolvedValue({
-      id: 'new-tenant-id',
+      id: 'meshql-uuid-both',
       display_name: 'Both Creator',
     });
 
@@ -162,15 +166,20 @@ describe('handleOnboard', () => {
 
     expect(result.statusCode).toBe(201);
     const body = JSON.parse(result.body);
-    expect(body.stripeWebhookUrl).toBe('https://stripe.example.com?tenant=new-tenant-id');
-    expect(body.paypalWebhookUrl).toBe('https://paypal.example.com?tenant=new-tenant-id');
+    expect(body.stripeWebhookUrl).toBe('https://stripe.example.com?tenant=meshql-uuid-both');
+    expect(body.paypalWebhookUrl).toBe('https://paypal.example.com?tenant=meshql-uuid-both');
 
     expect(deps.registerPayPalWebhook).toHaveBeenCalled();
+    expect(mockedUpdateTenant).toHaveBeenCalledWith('meshql-uuid-both', { paypal_webhook_id: 'WH-auto-123' });
   });
 
   it('returns 502 when PayPal registration fails', async () => {
     const deps = makeDeps({
       registerPayPalWebhook: vi.fn().mockRejectedValue(new Error('PayPal webhook registration failed: 422')),
+    });
+    mockedCreateTenant.mockResolvedValue({
+      id: 'meshql-uuid-fail',
+      display_name: 'Fail Creator',
     });
 
     const result = await handleOnboard('sub-123', JSON.stringify({
@@ -192,7 +201,7 @@ describe('handleOnboard', () => {
   it('creates tenant without payment providers', async () => {
     const deps = makeDeps();
     mockedCreateTenant.mockResolvedValue({
-      id: 'new-tenant-id',
+      id: 'meshql-uuid-nopay',
       display_name: 'No Payment Creator',
     });
 
@@ -203,7 +212,7 @@ describe('handleOnboard', () => {
 
     expect(result.statusCode).toBe(201);
     const body = JSON.parse(result.body);
-    expect(body.tenantId).toBe('new-tenant-id');
+    expect(body.tenantId).toBe('meshql-uuid-nopay');
     expect(body.webhookRegistered).toBe(true);
     expect(body.stripeWebhookUrl).toBeUndefined();
     expect(body.paypalWebhookUrl).toBeUndefined();

@@ -44,7 +44,6 @@ export async function handleOnboard(
   cognitoSub: string,
   body: string,
   deps: {
-    generateId: () => string;
     generateSecret: () => string;
     setWebhook: (botToken: string, webhookUrl: string, secretToken: string) => Promise<boolean>;
     registerPayPalWebhook: (baseUrl: string, clientId: string, clientSecret: string, webhookUrl: string, eventTypes: string[]) => Promise<string>;
@@ -75,30 +74,10 @@ export async function handleOnboard(
   const hasStripe = !!(parsed.stripeSecretKey && parsed.stripeWebhookSecret);
   const hasPayPal = !!(parsed.paypalClientId && parsed.paypalClientSecret);
 
-  const tenantId = deps.generateId();
   const webhookSecret = deps.generateSecret();
 
-  // Register PayPal webhook if needed
-  let paypalWebhookId: string | undefined;
-  if (hasPayPal) {
-    try {
-      const webhookUrl = `${deps.paypalWebhookUrl}?tenant=${tenantId}`;
-      paypalWebhookId = await deps.registerPayPalWebhook(
-        deps.paypalBaseUrl,
-        parsed.paypalClientId!,
-        parsed.paypalClientSecret!,
-        webhookUrl,
-        PAYPAL_WEBHOOK_EVENT_TYPES,
-      );
-    } catch (err) {
-      console.error('PayPal webhook registration failed:', err);
-      return { statusCode: 502, body: JSON.stringify({ error: 'PayPal webhook registration failed' }) };
-    }
-  }
-
-  // Create tenant with secrets stored on the object
-  await createTenant({
-    id: tenantId,
+  // Create tenant first to get the meshql-rs generated ID
+  const createdTenant = await createTenant({
     display_name: parsed.displayName,
     telegram_bot_token: parsed.telegramBotToken,
     webhook_secret: webhookSecret,
@@ -106,8 +85,27 @@ export async function handleOnboard(
     stripe_webhook_secret: hasStripe ? parsed.stripeWebhookSecret : undefined,
     paypal_client_id: hasPayPal ? parsed.paypalClientId : undefined,
     paypal_client_secret: hasPayPal ? parsed.paypalClientSecret : undefined,
-    paypal_webhook_id: paypalWebhookId,
   });
+  const tenantId = createdTenant.id;
+
+  // Register PayPal webhook after tenant creation (need real tenantId for webhook URL)
+  if (hasPayPal) {
+    try {
+      const webhookUrl = `${deps.paypalWebhookUrl}?tenant=${tenantId}`;
+      const paypalWebhookId = await deps.registerPayPalWebhook(
+        deps.paypalBaseUrl,
+        parsed.paypalClientId!,
+        parsed.paypalClientSecret!,
+        webhookUrl,
+        PAYPAL_WEBHOOK_EVENT_TYPES,
+      );
+      // Update tenant with the PayPal webhook ID
+      await updateTenant(tenantId, { paypal_webhook_id: paypalWebhookId });
+    } catch (err) {
+      console.error('PayPal webhook registration failed:', err);
+      return { statusCode: 502, body: JSON.stringify({ error: 'PayPal webhook registration failed' }) };
+    }
+  }
 
   // Register Telegram webhook
   const webhookRegistered = await deps.setWebhook(

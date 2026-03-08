@@ -2,7 +2,6 @@ import { graphql, restPost, restPut, restGet } from './client.js';
 import type { SubscriptionStatus, UserRoom } from '../shared/types.js';
 
 interface UserRoomInput {
-  id: string;
   tenant_id: string;
   room_id: string;
   telegram_user_id: number;

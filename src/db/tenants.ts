@@ -2,7 +2,6 @@ import { graphql, restPost, restPut, restGet } from './client.js';
 import type { Tenant } from '../shared/types.js';
 
 interface TenantInput {
-  id: string;
   display_name: string;
   telegram_bot_token?: string;
   webhook_secret?: string;
@@ -16,6 +15,7 @@ interface TenantInput {
 export async function createTenant(
   tenant: TenantInput,
 ): Promise<Tenant> {
+  // Let meshql-rs restlette generate the ID
   return restPost<Tenant>('/tenant/api', tenant);
 }
 

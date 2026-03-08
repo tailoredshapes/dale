@@ -8,7 +8,6 @@ import { handleRegisterWebhook } from './routes/webhooks.js';
 import { handleInviteUser, handleListUsers } from './routes/invite.js';
 import { setWebhook } from '../telegram/api.js';
 import { registerPayPalWebhook } from '../paypal/client.js';
-import { ulid } from 'ulid';
 import { randomBytes } from 'crypto';
 
 function json(result: { statusCode: number; body: string }): APIGatewayProxyResultV2 {
@@ -43,7 +42,6 @@ export async function handler(
       return json({ statusCode: 401, body: JSON.stringify({ error: 'Unauthorized' }) });
     }
     const onboardResult = await handleOnboard(cognitoSub, event.body ?? '', {
-      generateId: () => ulid(),
       generateSecret: () => randomBytes(32).toString('hex'),
       setWebhook,
       registerPayPalWebhook,

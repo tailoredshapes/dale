@@ -40,10 +40,6 @@ vi.mock('../../telegram/api.js', () => ({
   setWebhook: vi.fn(),
 }));
 
-vi.mock('ulid', () => ({
-  ulid: vi.fn().mockReturnValue('01TEST'),
-}));
-
 import { handler } from '../api.js';
 import { extractAuthContext, extractCognitoSub } from '../middleware/auth.js';
 

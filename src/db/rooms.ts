@@ -2,7 +2,6 @@ import { graphql, restPost, restPut, restGet } from './client.js';
 import type { Room } from '../shared/types.js';
 
 interface RoomInput {
-  id: string;
   tenant_id: string;
   name: string;
   description?: string;
@@ -16,6 +15,7 @@ interface RoomInput {
 export async function createRoom(
   room: RoomInput,
 ): Promise<Room> {
+  // Let meshql-rs restlette generate the ID
   return restPost<Room>('/room/api', room);
 }
 
