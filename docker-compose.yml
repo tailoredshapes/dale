@@ -18,10 +18,11 @@ services:
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
     healthcheck:
-      test: ["CMD-SHELL", "awslocal ssm describe-parameters || exit 1"]
+      test: ["CMD-SHELL", "curl -sf http://localhost:4566/_localstack/health | grep -q running || exit 1"]
       interval: 5s
       timeout: 5s
-      retries: 5
+      retries: 15
+      start_period: 20s
 
   dale-api:
     build:
