@@ -4,7 +4,7 @@
 import { Given, When, Then } from '@cucumber/cucumber';
 import { DaleWorld } from '../support/world.js';
 import { apiRequest } from '../support/http.js';
-import { getSSMParameter } from '../support/ssm.js';
+import { cacheTenantSecrets, getSSMParameter } from '../support/ssm.js';
 import {
   sendStripeWebhook,
   getStripeWebhookSecret,
@@ -39,16 +39,17 @@ Given<DaleWorld>(
     assert.equal(response.status, 201, `Second tenant onboard failed: ${JSON.stringify(response.body)}`);
 
     // Store second tenant info
-    this.secondTenantId = response.body.tenantId;
+    const { tenantId, webhookSecret, stripeWebhookSecret } = response.body;
+    this.secondTenantId = tenantId;
     this.secondTenantToken = user.idToken;
-    this.tenantIds.push(response.body.tenantId);
+    this.tenantIds.push(tenantId);
 
-    // Get webhook secret for second tenant
-    this.secondTenantWebhookSecret = await getSSMParameter(
-      `/dale/tenants/${response.body.tenantId}/telegram-webhook-secret`,
-      this.config,
-    );
-    this.webhookSecrets.push(this.secondTenantWebhookSecret);
+    // Cache secrets and store webhook secret
+    if (webhookSecret) {
+      cacheTenantSecrets(tenantId, { webhookSecret, stripeWebhookSecret });
+      this.secondTenantWebhookSecret = webhookSecret;
+      this.webhookSecrets.push(webhookSecret);
+    }
   },
 );
 

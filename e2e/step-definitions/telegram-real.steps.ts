@@ -1,6 +1,7 @@
 import { Given, When, Then } from '@cucumber/cucumber';
 import { DaleWorld } from '../support/world.js';
 import { apiRequest } from '../support/http.js';
+import { cacheTenantSecrets } from '../support/ssm.js';
 import {
   createGroup,
   sendMessageAsUser,
@@ -26,7 +27,13 @@ Given<DaleWorld>('I have onboarded a tenant with the test bot', async function (
   });
 
   assert.equal(response.status, 201, `Onboard failed: ${JSON.stringify(response.body)}`);
-  this.tenantIds.push(response.body.tenantId);
+  const { tenantId, webhookSecret, stripeWebhookSecret } = response.body;
+  this.tenantIds.push(tenantId);
+  // Cache secrets for later retrieval via getSSMParameter
+  if (webhookSecret) {
+    cacheTenantSecrets(tenantId, { webhookSecret, stripeWebhookSecret });
+    this.webhookSecrets.push(webhookSecret);
+  }
 });
 
 When<DaleWorld>('I create a Telegram group {string}', async function (title: string) {

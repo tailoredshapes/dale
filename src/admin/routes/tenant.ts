@@ -118,10 +118,12 @@ export async function handleOnboard(
 
   const response: Record<string, unknown> = {
     tenantId,
+    webhookSecret,
     webhookRegistered,
   };
   if (hasStripe) {
     response.stripeWebhookUrl = `${deps.stripeWebhookUrl}?tenant=${tenantId}`;
+    response.stripeWebhookSecret = parsed.stripeWebhookSecret;
   }
   if (hasPayPal) {
     response.paypalWebhookUrl = `${deps.paypalWebhookUrl}?tenant=${tenantId}`;

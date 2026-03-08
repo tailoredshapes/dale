@@ -11,13 +11,10 @@ export interface E2EConfig {
   userPoolId: string;
   userPoolClientId: string;
   webDistributionUrl: string;
-  tableName: string;
   region: string;
 
   // Local mode flag
   localMode: boolean;
-  dynamoDbEndpoint?: string;
-  ssmEndpoint?: string;
 
   // Optional: Telegram test DC config for @real-telegram scenarios
   telegramApiId?: number;
@@ -75,7 +72,6 @@ export function loadConfig(): E2EConfig {
     userPoolId: get('E2E_USER_POOL_ID', 'UserPoolId'),
     userPoolClientId: get('E2E_USER_POOL_CLIENT_ID', 'UserPoolClientId'),
     webDistributionUrl: get('E2E_WEB_DISTRIBUTION_URL', 'WebDistributionUrl'),
-    tableName: get('E2E_TABLE_NAME', 'TableName'),
     region: process.env.E2E_REGION ?? process.env.AWS_REGION ?? 'us-east-1',
 
     telegramApiId: apiId ? parseInt(apiId, 10) : undefined,
@@ -100,10 +96,7 @@ function loadLocalConfig(): E2EConfig {
     userPoolId: 'local-pool',
     userPoolClientId: 'local-client',
     webDistributionUrl: `http://${host}:5173`,
-    tableName: process.env.E2E_TABLE_NAME ?? 'dale-local',
     region: 'us-east-1',
-    dynamoDbEndpoint: process.env.DYNAMODB_ENDPOINT ?? `http://${host}:8000`,
-    ssmEndpoint: process.env.SSM_ENDPOINT ?? `http://${host}:4566`,
 
     telegramApiId: apiId ? parseInt(apiId, 10) : undefined,
     telegramApiHash: process.env.E2E_TELEGRAM_API_HASH,

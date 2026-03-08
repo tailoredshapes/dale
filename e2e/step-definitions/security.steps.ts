@@ -4,6 +4,7 @@
 import { Given, When, Then, DataTable } from '@cucumber/cucumber';
 import { DaleWorld } from '../support/world.js';
 import { apiRequest } from '../support/http.js';
+import { cacheTenantSecrets } from '../support/ssm.js';
 import { createLocalTestUser } from '../support/local-auth.js';
 import assert from 'node:assert/strict';
 
@@ -69,7 +70,13 @@ Given<DaleWorld>(
     });
 
     assert.equal(response.status, 201, `Onboard failed: ${JSON.stringify(response.body)}`);
-    this.tenantIds.push(response.body.tenantId);
+    const { tenantId, webhookSecret, stripeWebhookSecret } = response.body;
+    this.tenantIds.push(tenantId);
+    // Cache secrets for later retrieval via getSSMParameter
+    if (webhookSecret) {
+      cacheTenantSecrets(tenantId, { webhookSecret, stripeWebhookSecret });
+      this.webhookSecrets.push(webhookSecret);
+    }
   },
 );
 

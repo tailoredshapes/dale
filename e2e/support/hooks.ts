@@ -3,7 +3,8 @@ import { chromium } from 'playwright';
 import { DaleWorld } from './world.js';
 import { createTestUser, deleteTestUser } from './auth.js';
 import { createLocalTestUser, deleteLocalTestUser } from './local-auth.js';
-import { cleanupDynamoDBTenant, cleanupSSMParams, cleanupWebhookSecret } from './cleanup.js';
+import { cleanupDynamoDBTenant, cleanupWebhookSecret } from './cleanup.js';
+import { clearAllSecretsCache } from './ssm.js';
 import { createTelegramClient, deleteGroup } from './gramjs.js';
 
 Before<DaleWorld>({ tags: '@auth' }, async function () {
@@ -68,16 +69,18 @@ After<DaleWorld>({ tags: '@tutorial' }, async function () {
 });
 
 After<DaleWorld>(async function () {
-  // Clean up tenants from DynamoDB and SSM
+  // Clean up tenant data (clears local secrets cache)
   for (const tenantId of this.tenantIds) {
     await cleanupDynamoDBTenant(this.config, tenantId);
-    await cleanupSSMParams(this.config, tenantId);
   }
 
-  // Clean up webhook secrets
+  // Clean up webhook secrets (no-op but kept for consistency)
   for (const secret of this.webhookSecrets) {
     await cleanupWebhookSecret(this.config, secret);
   }
+
+  // Clear all cached secrets to ensure clean state for next scenario
+  clearAllSecretsCache();
 
   // Clean up Cognito user
   if (this.cognitoUsername) {
