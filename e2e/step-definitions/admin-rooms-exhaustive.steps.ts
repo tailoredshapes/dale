@@ -107,4 +107,19 @@ Then<DaleWorld>('the room should be active', function () {
   );
 });
 
+Then<DaleWorld>('the room should not be active', function () {
+  assert.ok(this.lastResponse, 'No response recorded');
+  const body = this.lastResponse.body;
+
+  // Handle both single room (object) and list of rooms (array) responses
+  if (Array.isArray(body)) {
+    const room = body.find((r: any) => r.roomId === this.lastRoomId);
+    assert.ok(room, 'No room found in array');
+    assert.equal(room.isActive, false, `Expected room to be inactive, got isActive=${room.isActive}`);
+  } else {
+    assert.ok(typeof body === 'object', 'Expected body to be an object');
+    assert.equal(body.isActive, false, `Expected room to be inactive, got isActive=${body.isActive}`);
+  }
+});
+
 // Note: "there should be {int} room(s)" is defined in telegram-group.steps.ts

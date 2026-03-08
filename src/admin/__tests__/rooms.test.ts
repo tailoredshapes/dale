@@ -25,13 +25,17 @@ beforeEach(() => {
 });
 
 describe('handleListRooms', () => {
-  it('returns rooms list', async () => {
+  it('returns rooms list with all fields', async () => {
     mockedListRooms.mockResolvedValue([
       {
         id: 'r1',
         tenant_id: 'tenant-1',
         name: 'VIP',
+        description: 'VIP room',
+        telegram_group_id: '12345',
         payment_link: 'https://pay',
+        paypal_payment_link: 'https://paypal',
+        price_description: '$10/month',
         active: true,
       },
     ]);
@@ -41,31 +45,144 @@ describe('handleListRooms', () => {
     const rooms = JSON.parse(result.body);
     expect(rooms).toHaveLength(1);
     expect(rooms[0].roomId).toBe('r1');
+    expect(rooms[0].name).toBe('VIP');
+    expect(rooms[0].description).toBe('VIP room');
+    expect(rooms[0].telegramGroupId).toBe('12345');
+    expect(rooms[0].paymentLink).toBe('https://pay');
+    expect(rooms[0].paypalPaymentLink).toBe('https://paypal');
+    expect(rooms[0].priceDescription).toBe('$10/month');
+    expect(rooms[0].isActive).toBe(true);
+  });
+
+  it('returns multiple rooms (E2E: List rooms returns all created rooms)', async () => {
+    mockedListRooms.mockResolvedValue([
+      { id: 'r1', tenant_id: 'tenant-1', name: 'Room One', payment_link: 'https://pay', active: true },
+      { id: 'r2', tenant_id: 'tenant-1', name: 'Room Two', payment_link: 'https://pay', active: true },
+      { id: 'r3', tenant_id: 'tenant-1', name: 'Room Three', payment_link: 'https://pay', active: true },
+    ]);
+
+    const result = await handleListRooms(AUTH);
+    expect(result.statusCode).toBe(200);
+    const rooms = JSON.parse(result.body);
+    expect(rooms).toHaveLength(3);
+  });
+
+  it('returns empty array when no rooms (E2E: Delete room removes it from list)', async () => {
+    mockedListRooms.mockResolvedValue([]);
+
+    const result = await handleListRooms(AUTH);
+    expect(result.statusCode).toBe(200);
+    const rooms = JSON.parse(result.body);
+    expect(rooms).toHaveLength(0);
   });
 });
 
 describe('handleGetRoom', () => {
-  it('returns room detail', async () => {
+  it('returns room detail with all fields (E2E: Get room by ID)', async () => {
     mockedGetRoom.mockResolvedValue({
       id: 'r1',
       tenant_id: 'tenant-1',
-      name: 'VIP',
+      name: 'Specific Room',
+      description: 'A test room',
+      telegram_group_id: '12345',
       payment_link: 'https://pay',
+      paypal_payment_link: 'https://paypal',
+      price_description: '$10/month',
       active: true,
     });
 
     const result = await handleGetRoom(AUTH, 'r1');
     expect(result.statusCode).toBe(200);
+    const body = JSON.parse(result.body);
+    expect(body.roomId).toBe('r1');
+    expect(body.name).toBe('Specific Room');
+    expect(body.description).toBe('A test room');
+    expect(body.telegramGroupId).toBe('12345');
+    expect(body.paymentLink).toBe('https://pay');
+    expect(body.paypalPaymentLink).toBe('https://paypal');
+    expect(body.priceDescription).toBe('$10/month');
+    expect(body.isActive).toBe(true);
   });
 
-  it('returns 404 when not found', async () => {
+  it('returns room with isActive false for inactive room', async () => {
+    mockedGetRoom.mockResolvedValue({
+      id: 'r1',
+      tenant_id: 'tenant-1',
+      name: 'Inactive Room',
+      payment_link: '',
+      active: false,
+    });
+
+    const result = await handleGetRoom(AUTH, 'r1');
+    expect(result.statusCode).toBe(200);
+    const body = JSON.parse(result.body);
+    expect(body.isActive).toBe(false);
+  });
+
+  it('returns 404 when not found (E2E: Get non-existent room)', async () => {
     mockedGetRoom.mockResolvedValue(null);
-    const result = await handleGetRoom(AUTH, 'missing');
+    const result = await handleGetRoom(AUTH, 'nonexistent-room-id');
     expect(result.statusCode).toBe(404);
   });
 });
 
 describe('handleCreateRoom', () => {
+  it('creates room with all fields (E2E: Create room with all fields)', async () => {
+    mockedCreateRoom.mockResolvedValue({
+      id: 'meshql-full-room',
+      tenant_id: 'tenant-1',
+      name: 'Full Room',
+      description: 'A fully-spec\'d room',
+      payment_link: 'https://buy.stripe.com/full',
+      price_description: '$10/month',
+      active: true,
+    });
+
+    const result = await handleCreateRoom(AUTH, JSON.stringify({
+      name: 'Full Room',
+      description: 'A fully-spec\'d room',
+      paymentLink: 'https://buy.stripe.com/full',
+      priceDescription: '$10/month',
+    }));
+
+    expect(result.statusCode).toBe(201);
+    const body = JSON.parse(result.body);
+    expect(body.roomId).toBe('meshql-full-room');
+    expect(body.name).toBe('Full Room');
+
+    expect(mockedCreateRoom).toHaveBeenCalledWith(expect.objectContaining({
+      name: 'Full Room',
+      description: 'A fully-spec\'d room',
+      payment_link: 'https://buy.stripe.com/full',
+      price_description: '$10/month',
+      active: true,
+    }));
+  });
+
+  it('creates room with minimal fields (E2E: Create room with minimal fields)', async () => {
+    mockedCreateRoom.mockResolvedValue({
+      id: 'meshql-minimal-room',
+      tenant_id: 'tenant-1',
+      name: 'Minimal Room',
+      payment_link: '',
+      active: false,
+    });
+
+    const result = await handleCreateRoom(AUTH, JSON.stringify({
+      name: 'Minimal Room',
+    }));
+
+    expect(result.statusCode).toBe(201);
+    const body = JSON.parse(result.body);
+    expect(body.roomId).toBe('meshql-minimal-room');
+
+    // Room without payment link should be inactive
+    expect(mockedCreateRoom).toHaveBeenCalledWith(expect.objectContaining({
+      name: 'Minimal Room',
+      active: false,
+    }));
+  });
+
   it('creates room with Stripe link and returns roomId from restlette', async () => {
     mockedCreateRoom.mockResolvedValue({
       id: 'meshql-room-uuid',
@@ -120,7 +237,7 @@ describe('handleCreateRoom', () => {
     expect(result.statusCode).toBe(201);
   });
 
-  it('creates room without payment link (starts inactive)', async () => {
+  it('creates room without payment link (starts inactive) (E2E: Room is inactive by default)', async () => {
     mockedCreateRoom.mockResolvedValue({
       id: 'meshql-no-link-room',
       tenant_id: 'tenant-1',
@@ -143,7 +260,44 @@ describe('handleCreateRoom', () => {
 });
 
 describe('handleUpdateRoom', () => {
-  it('updates room', async () => {
+  it('updates room name (E2E: Update room name)', async () => {
+    mockedUpdateRoom.mockResolvedValue({
+      id: 'r1',
+      tenant_id: 'tenant-1',
+      name: 'New Name',
+      active: true,
+    });
+
+    const result = await handleUpdateRoom(AUTH, 'r1', JSON.stringify({ name: 'New Name' }));
+    expect(result.statusCode).toBe(200);
+    const body = JSON.parse(result.body);
+    expect(body.updated).toBe(true);
+
+    expect(mockedUpdateRoom).toHaveBeenCalledWith('tenant-1', 'r1', { name: 'New Name' });
+  });
+
+  it('updates room with payment link and activates it (E2E: Update room payment link activates it)', async () => {
+    mockedUpdateRoom.mockResolvedValue({
+      id: 'r1',
+      tenant_id: 'tenant-1',
+      name: 'Inactive Room',
+      payment_link: 'https://buy.stripe.com/activated',
+      active: true,
+    });
+
+    const result = await handleUpdateRoom(AUTH, 'r1', JSON.stringify({
+      paymentLink: 'https://buy.stripe.com/activated',
+      isActive: true,
+    }));
+    expect(result.statusCode).toBe(200);
+
+    expect(mockedUpdateRoom).toHaveBeenCalledWith('tenant-1', 'r1', {
+      payment_link: 'https://buy.stripe.com/activated',
+      active: true,
+    });
+  });
+
+  it('updates all room fields', async () => {
     mockedUpdateRoom.mockResolvedValue({
       id: 'r1',
       tenant_id: 'tenant-1',
@@ -151,8 +305,24 @@ describe('handleUpdateRoom', () => {
       active: true,
     });
 
-    const result = await handleUpdateRoom(AUTH, 'r1', JSON.stringify({ name: 'Updated' }));
+    const result = await handleUpdateRoom(AUTH, 'r1', JSON.stringify({
+      name: 'Updated Name',
+      description: 'Updated Description',
+      paymentLink: 'https://new-pay',
+      paypalPaymentLink: 'https://new-paypal',
+      priceDescription: '$20/month',
+      isActive: false,
+    }));
     expect(result.statusCode).toBe(200);
+
+    expect(mockedUpdateRoom).toHaveBeenCalledWith('tenant-1', 'r1', {
+      name: 'Updated Name',
+      description: 'Updated Description',
+      payment_link: 'https://new-pay',
+      paypal_payment_link: 'https://new-paypal',
+      price_description: '$20/month',
+      active: false,
+    });
   });
 
   it('returns 400 for invalid JSON', async () => {
