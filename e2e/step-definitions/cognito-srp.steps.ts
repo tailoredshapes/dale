@@ -9,7 +9,9 @@ import {
 import { DaleWorld } from '../support/world.js';
 import { srpAuthenticate } from '../support/srp-auth.js';
 
-const cognitoClient = new CognitoIdentityProviderClient({});
+// Use region from environment with fallback to us-east-1
+const region = process.env.AWS_REGION ?? process.env.E2E_REGION ?? 'us-east-1';
+const cognitoClient = new CognitoIdentityProviderClient({ region });
 
 Given<DaleWorld>('a temporary user exists for SRP testing', async function () {
   const username = `e2e-srp-${Date.now()}@test.dale.dev`;

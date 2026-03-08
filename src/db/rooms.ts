@@ -1,4 +1,4 @@
-import { graphql, restPost, restPut, restGet } from './client.js';
+import { graphql, restPost, restPut, restGet, restDelete } from './client.js';
 import type { Room } from '../shared/types.js';
 
 interface RoomInput {
@@ -100,4 +100,16 @@ export async function updateRoom(
     throw new Error(`Room ${roomId} not found for tenant ${tenantId}`);
   }
   return restPut<Room>('/room/api', roomId, updates);
+}
+
+export async function deleteRoom(
+  tenantId: string,
+  roomId: string,
+): Promise<void> {
+  // Verify tenant owns the room first
+  const existing = await getRoom(tenantId, roomId);
+  if (!existing) {
+    throw new Error(`Room ${roomId} not found for tenant ${tenantId}`);
+  }
+  await restDelete('/room/api', roomId);
 }

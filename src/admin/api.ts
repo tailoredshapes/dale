@@ -2,7 +2,7 @@ import type { APIGatewayProxyEventV2, APIGatewayProxyResultV2 } from 'aws-lambda
 import { getPlatformConfig } from '../shared/config.js';
 import { extractAuthContext, extractCognitoSub, registerTenantForSub } from './middleware/auth.js';
 import { handleGetTenant, handleUpdateTenant, handleOnboard, handleConfigurePayment } from './routes/tenant.js';
-import { handleListRooms, handleGetRoom, handleCreateRoom, handleUpdateRoom } from './routes/rooms.js';
+import { handleListRooms, handleGetRoom, handleCreateRoom, handleUpdateRoom, handleDeleteRoom } from './routes/rooms.js';
 import { handleListSubscribers } from './routes/subscribers.js';
 import { handleRegisterWebhook } from './routes/webhooks.js';
 import { handleInviteUser, handleListUsers } from './routes/invite.js';
@@ -61,6 +61,13 @@ export async function handler(
   // All other routes require existing tenant
   const auth = await extractAuthContext(event);
   if (!auth) {
+    // Check if user is authenticated but just hasn't onboarded
+    const cognitoSub = extractCognitoSub(event);
+    if (cognitoSub) {
+      // User is authenticated but has no tenant - must onboard first
+      return json({ statusCode: 404, body: JSON.stringify({ error: 'Tenant not found. Please onboard first.' }) });
+    }
+    // Not authenticated at all
     return json({ statusCode: 401, body: JSON.stringify({ error: 'Unauthorized' }) });
   }
 
@@ -99,6 +106,9 @@ export async function handler(
     }
     if (method === 'PUT') {
       return json(await handleUpdateRoom(auth, roomId, event.body ?? ''));
+    }
+    if (method === 'DELETE') {
+      return json(await handleDeleteRoom(auth, roomId));
     }
   }
 

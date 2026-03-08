@@ -4,7 +4,10 @@ import {
   ListUsersCommand,
 } from '@aws-sdk/client-cognito-identity-provider';
 
-const cognito = new CognitoIdentityProviderClient({});
+// Use region from environment with fallback - Lambda provides AWS_REGION automatically
+const cognito = new CognitoIdentityProviderClient({
+  region: process.env.AWS_REGION ?? 'us-east-1',
+});
 
 export async function handleInviteUser(
   userPoolId: string,

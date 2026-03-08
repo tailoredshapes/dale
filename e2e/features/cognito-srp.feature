@@ -6,4 +6,4 @@ Feature: Cognito SRP Authentication
     When the user authenticates via SRP
     Then the SRP login should succeed with valid tokens
     When I send an authenticated GET request to "/api/tenant"
-    Then the response status should be 401
+    Then the response status should be 404

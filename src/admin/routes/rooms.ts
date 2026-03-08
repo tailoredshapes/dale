@@ -1,4 +1,4 @@
-import { createRoom, getRoom, listRoomsForTenant, updateRoom } from '../../db/rooms.js';
+import { createRoom, getRoom, listRoomsForTenant, updateRoom, deleteRoom } from '../../db/rooms.js';
 import type { AuthContext } from '../middleware/auth.js';
 
 export async function handleListRooms(
@@ -54,9 +54,12 @@ export async function handleCreateRoom(
     return { statusCode: 400, body: JSON.stringify({ error: 'Invalid JSON' }) };
   }
 
-  if (!parsed.name || (!parsed.paymentLink && !parsed.paypalPaymentLink)) {
-    return { statusCode: 400, body: JSON.stringify({ error: 'Missing required fields: name and at least one payment link' }) };
+  if (!parsed.name) {
+    return { statusCode: 400, body: JSON.stringify({ error: 'Missing required field: name' }) };
   }
+
+  // Room is active only if at least one payment link is provided
+  const hasPaymentLink = !!(parsed.paymentLink || parsed.paypalPaymentLink);
 
   // Let meshql-rs restlette generate the ID
   const room = await createRoom({
@@ -66,7 +69,7 @@ export async function handleCreateRoom(
     payment_link: parsed.paymentLink ?? '',
     paypal_payment_link: parsed.paypalPaymentLink,
     price_description: parsed.priceDescription,
-    active: true,
+    active: hasPaymentLink,
   });
 
   return {
@@ -98,4 +101,17 @@ export async function handleUpdateRoom(
 
   await updateRoom(auth.tenantId, roomId, updates);
   return { statusCode: 200, body: JSON.stringify({ updated: true }) };
+}
+
+export async function handleDeleteRoom(
+  auth: AuthContext,
+  roomId: string,
+): Promise<{ statusCode: number; body: string }> {
+  const room = await getRoom(auth.tenantId, roomId);
+  if (!room) {
+    return { statusCode: 404, body: JSON.stringify({ error: 'Room not found' }) };
+  }
+
+  await deleteRoom(auth.tenantId, roomId);
+  return { statusCode: 200, body: JSON.stringify({ deleted: true }) };
 }

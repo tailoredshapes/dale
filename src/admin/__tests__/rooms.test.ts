@@ -6,15 +6,17 @@ vi.mock('../../db/rooms.js', () => ({
   getRoom: vi.fn(),
   listRoomsForTenant: vi.fn(),
   updateRoom: vi.fn(),
+  deleteRoom: vi.fn(),
 }));
 
-import { handleListRooms, handleGetRoom, handleCreateRoom, handleUpdateRoom } from '../routes/rooms.js';
-import { getRoom, listRoomsForTenant, createRoom, updateRoom } from '../../db/rooms.js';
+import { handleListRooms, handleGetRoom, handleCreateRoom, handleUpdateRoom, handleDeleteRoom } from '../routes/rooms.js';
+import { getRoom, listRoomsForTenant, createRoom, updateRoom, deleteRoom } from '../../db/rooms.js';
 
 const mockedGetRoom = vi.mocked(getRoom);
 const mockedListRooms = vi.mocked(listRoomsForTenant);
 const mockedCreateRoom = vi.mocked(createRoom);
 const mockedUpdateRoom = vi.mocked(updateRoom);
+const mockedDeleteRoom = vi.mocked(deleteRoom);
 
 const AUTH = { tenantId: 'tenant-1' };
 
@@ -118,10 +120,25 @@ describe('handleCreateRoom', () => {
     expect(result.statusCode).toBe(201);
   });
 
-  it('returns 400 when no payment link provided', async () => {
-    const result = await handleCreateRoom(AUTH, JSON.stringify({ name: 'No Link' }));
-    expect(result.statusCode).toBe(400);
-    expect(JSON.parse(result.body).error).toContain('payment link');
+  it('creates room without payment link (starts inactive)', async () => {
+    mockedCreateRoom.mockResolvedValue({
+      id: 'meshql-no-link-room',
+      tenant_id: 'tenant-1',
+      name: 'No Link Room',
+      payment_link: '',
+      active: false,
+    });
+
+    const result = await handleCreateRoom(AUTH, JSON.stringify({ name: 'No Link Room' }));
+    expect(result.statusCode).toBe(201);
+    const body = JSON.parse(result.body);
+    expect(body.roomId).toBe('meshql-no-link-room');
+
+    // Verify room was created with active: false
+    expect(mockedCreateRoom).toHaveBeenCalledWith(expect.objectContaining({
+      name: 'No Link Room',
+      active: false,
+    }));
   });
 });
 
@@ -141,5 +158,28 @@ describe('handleUpdateRoom', () => {
   it('returns 400 for invalid JSON', async () => {
     const result = await handleUpdateRoom(AUTH, 'r1', 'bad');
     expect(result.statusCode).toBe(400);
+  });
+});
+
+describe('handleDeleteRoom', () => {
+  it('deletes room and returns 200', async () => {
+    mockedGetRoom.mockResolvedValue({
+      id: 'r1',
+      tenant_id: 'tenant-1',
+      name: 'To Delete',
+      payment_link: 'https://pay',
+      active: true,
+    });
+    mockedDeleteRoom.mockResolvedValue(undefined);
+
+    const result = await handleDeleteRoom(AUTH, 'r1');
+    expect(result.statusCode).toBe(200);
+    expect(mockedDeleteRoom).toHaveBeenCalledWith('tenant-1', 'r1');
+  });
+
+  it('returns 404 when room not found', async () => {
+    mockedGetRoom.mockResolvedValue(null);
+    const result = await handleDeleteRoom(AUTH, 'missing');
+    expect(result.statusCode).toBe(404);
   });
 });
