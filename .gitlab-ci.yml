@@ -149,3 +149,23 @@ deploy-prod:
       done
     - cd backend && cargo build --release && cd ..
     - npx cdk deploy Dale-Prod -c env=prod --require-approval never
+
+# ── Staging (on-demand, manual) ───────────────────────
+
+staging-up:
+  stage: deploy
+  tags: [shell]
+  rules:
+    - when: manual
+  script:
+    - docker compose --profile staging up -d --build
+    - echo "Staging is live at https://dale.poundit.co.uk"
+
+staging-down:
+  stage: deploy
+  tags: [shell]
+  rules:
+    - when: manual
+  script:
+    - docker compose --profile staging down -v
+    - echo "Staging is down"
