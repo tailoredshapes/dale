@@ -184,6 +184,7 @@ staging-up:
     - if: $CI_COMMIT_BRANCH != "main"
       when: on_success
   script:
+    - cd backend && cargo build --release && cd ..
     - docker compose --profile staging up -d --build
     - echo "Staging is live at https://dale.poundit.co.uk"
 
