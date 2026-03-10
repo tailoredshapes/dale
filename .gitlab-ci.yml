@@ -71,9 +71,15 @@ e2e-local:
     - |
       PARENT=$(dirname $(pwd))
       for repo in meshql-rs merkql merksql; do
-        if [ ! -d "$PARENT/tailoredshapes/$repo" ]; then
-          git clone http://oauth2:${GITLAB_TOKEN}@192.168.7.42:8929/tailoredshapes/$repo.git \
-            "$PARENT/tailoredshapes/$repo"
+        TARGET="$PARENT/tailoredshapes/$repo"
+        if [ -d "$TARGET" ] && ! git -C "$TARGET" rev-parse --git-dir > /dev/null 2>&1; then
+          echo "Removing corrupt/incomplete $repo directory"
+          rm -rf "$TARGET"
+        fi
+        if [ ! -d "$TARGET" ]; then
+          git clone http://oauth2:${GITLAB_TOKEN}@192.168.7.42:8929/tailoredshapes/$repo.git "$TARGET"
+        else
+          git -C "$TARGET" pull --ff-only || true
         fi
       done
     # Build meshql-rs backend binary before docker compose (Dockerfile copies pre-built binary)
@@ -142,9 +148,15 @@ deploy-prod:
     - |
       PARENT=$(dirname $(pwd))
       for repo in meshql-rs merkql merksql; do
-        if [ ! -d "$PARENT/tailoredshapes/$repo" ]; then
-          git clone http://oauth2:${GITLAB_TOKEN}@192.168.7.42:8929/tailoredshapes/$repo.git \
-            "$PARENT/tailoredshapes/$repo"
+        TARGET="$PARENT/tailoredshapes/$repo"
+        if [ -d "$TARGET" ] && ! git -C "$TARGET" rev-parse --git-dir > /dev/null 2>&1; then
+          echo "Removing corrupt/incomplete $repo directory"
+          rm -rf "$TARGET"
+        fi
+        if [ ! -d "$TARGET" ]; then
+          git clone http://oauth2:${GITLAB_TOKEN}@192.168.7.42:8929/tailoredshapes/$repo.git "$TARGET"
+        else
+          git -C "$TARGET" pull --ff-only || true
         fi
       done
     - cd backend && cargo build --release && cd ..
