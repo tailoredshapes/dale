@@ -3,6 +3,7 @@ image: node:20
 stages:
   - test
   - e2e
+  - qa-review
   - deploy
 
 variables:
@@ -120,6 +121,18 @@ e2e-local:
   after_script:
     - docker compose logs || true
     - docker compose down -v || true
+
+gemini-qa:
+  stage: qa-review
+  tags:
+    - shell
+  needs:
+    - e2e-local
+  script:
+    - bash scripts/gemini-review.sh
+  allow_failure: false
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "push" || $CI_PIPELINE_SOURCE == "merge_request_event"
 
 deploy-prod:
   stage: deploy
