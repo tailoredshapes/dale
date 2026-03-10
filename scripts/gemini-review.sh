@@ -1,12 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Gemini QA/BA review — compares .feature files against implementation diff
-
-if [ -z "${GEMINI_API_KEY:-}" ]; then
-  echo "ERROR: GEMINI_API_KEY is not set"
-  exit 1
-fi
+# Gemini QA/BA review — pipes feature files + diff into the gemini CLI (no API key needed)
 
 # Collect feature files (skip node_modules)
 FEATURE_FILES=$(find . -name '*.feature' -not -path '*/node_modules/*' 2>/dev/null || true)
@@ -33,54 +28,21 @@ if [ -z "$DIFF" ]; then
   exit 0
 fi
 
-# Truncate diff to ~80k chars
-DIFF="${DIFF:0:80000}"
+# Write feature files and diff to temp files for gemini CLI
+TMPDIR_REVIEW=$(mktemp -d)
+trap 'rm -rf "$TMPDIR_REVIEW"' EXIT
 
-# Build Gemini API request
-PROMPT="You are a QA/BA reviewer. Given these Gherkin feature files and this implementation diff, does the implementation correctly satisfy the scenarios? List any scenarios that are broken, missing, or incorrectly implemented. Be specific and terse. If everything looks correct, respond with exactly: LGTM
+FEATURES_FILE="$TMPDIR_REVIEW/features.txt"
+DIFF_FILE="$TMPDIR_REVIEW/diff.txt"
 
-=== FEATURE FILES ===
-$FEATURES
-=== IMPLEMENTATION DIFF ===
-$DIFF"
+printf '%s' "$FEATURES" > "$FEATURES_FILE"
+printf '%s' "${DIFF:0:80000}" > "$DIFF_FILE"
 
-# Escape for JSON
-PROMPT_JSON=$(printf '%s' "$PROMPT" | python3 -c 'import json,sys; print(json.dumps(sys.stdin.read()))')
+echo "Sending review request to Gemini CLI..."
 
-PAYLOAD=$(cat <<ENDJSON
-{
-  "contents": [{"parts": [{"text": $PROMPT_JSON}]}],
-  "generationConfig": {"temperature": 0.2, "maxOutputTokens": 2048}
-}
-ENDJSON
-)
+PROMPT="You are a QA/BA reviewer. Given these Gherkin feature files (@${FEATURES_FILE}) and this implementation diff (@${DIFF_FILE}), does the implementation correctly satisfy the scenarios? List any scenarios that are broken, missing, or incorrectly implemented. Be specific and terse. If everything looks correct, respond with exactly: LGTM"
 
-API_URL="https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-pro:generateContent?key=${GEMINI_API_KEY}"
-
-echo "Sending review request to Gemini..."
-RESPONSE=$(curl -s -w '\n%{http_code}' -X POST "$API_URL" \
-  -H "Content-Type: application/json" \
-  -d "$PAYLOAD")
-
-HTTP_CODE=$(echo "$RESPONSE" | tail -1)
-BODY=$(echo "$RESPONSE" | sed '$d')
-
-if [ "$HTTP_CODE" -ne 200 ]; then
-  echo "ERROR: Gemini API returned HTTP $HTTP_CODE"
-  echo "$BODY"
-  exit 1
-fi
-
-# Extract response text
-REVIEW=$(echo "$BODY" | python3 -c '
-import json, sys
-data = json.load(sys.stdin)
-try:
-    print(data["candidates"][0]["content"]["parts"][0]["text"])
-except (KeyError, IndexError):
-    print("ERROR: unexpected response structure")
-    sys.exit(1)
-')
+REVIEW=$(gemini "$PROMPT" 2>&1)
 
 echo "=== Gemini QA Review ==="
 echo "$REVIEW"
@@ -100,7 +62,7 @@ fi
 
 # Check verdict
 TRIMMED=$(echo "$REVIEW" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
-if echo "$TRIMMED" | grep -iq '^lgtm$'; then
+if echo "$TRIMMED" | grep -iq 'lgtm'; then
   echo "✅ Review passed"
   exit 0
 else
