@@ -72,7 +72,7 @@ e2e-local:
     - |
       PARENT=$(dirname $(pwd))
       for repo in meshql-rs merkql merksql; do
-        TARGET="$PARENT/tailoredshapes/$repo"
+        TARGET="$PARENT/$repo"
         if [ -d "$TARGET" ] && ! git -C "$TARGET" rev-parse --git-dir > /dev/null 2>&1; then
           echo "Removing corrupt/incomplete $repo directory"
           rm -rf "$TARGET"
@@ -161,7 +161,7 @@ deploy-prod:
     - |
       PARENT=$(dirname $(pwd))
       for repo in meshql-rs merkql merksql; do
-        TARGET="$PARENT/tailoredshapes/$repo"
+        TARGET="$PARENT/$repo"
         if [ -d "$TARGET" ] && ! git -C "$TARGET" rev-parse --git-dir > /dev/null 2>&1; then
           echo "Removing corrupt/incomplete $repo directory"
           rm -rf "$TARGET"
