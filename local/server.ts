@@ -9,6 +9,7 @@ import type { APIGatewayProxyEventV2, APIGatewayProxyResultV2 } from 'aws-lambda
 // Set environment variables for local mode before importing handlers
 process.env.SKIP_PAYPAL_SIGNATURE_VERIFY = 'true';
 process.env.SKIP_PAYPAL_REGISTRATION = 'true';
+process.env.SKIP_STRIPE_SIGNATURE_VERIFY = 'true';
 
 // Import handlers dynamically
 const { handler: adminHandler } = await import('../src/admin/api.js');
@@ -16,6 +17,9 @@ const { handler: telegramHandler } = await import('../src/telegram/webhook.js');
 const { handler: stripeHandler } = await import('../src/stripe/webhook.js');
 const { handler: paypalHandler } = await import('../src/paypal/webhook.js');
 const { signToken, verifyToken } = await import('./mock-auth.js');
+
+// In-memory store for mock Cognito users
+const mockUsers: { email: string; status: string; createdAt: string }[] = [];
 
 // Helper to read request body
 async function readBody(req: IncomingMessage): Promise<string> {
@@ -191,6 +195,43 @@ const adminServer = createServer(async (req, res) => {
         username: email,
       }),
     });
+    return;
+  }
+
+  // Mock Cognito: invite user
+  if (url.pathname === '/api/admin/invite' && req.method === 'POST') {
+    const authHeader = req.headers.authorization;
+    if (!authHeader?.startsWith('Bearer ')) {
+      sendResponse(res, { statusCode: 401, body: JSON.stringify({ error: 'Unauthorized' }) });
+      return;
+    }
+    const body = await readBody(req);
+    let parsed: { email?: string };
+    try {
+      parsed = JSON.parse(body || '{}');
+    } catch {
+      sendResponse(res, { statusCode: 400, body: JSON.stringify({ error: 'Invalid JSON' }) });
+      return;
+    }
+    const email = parsed.email?.trim();
+    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      sendResponse(res, { statusCode: 400, body: JSON.stringify({ error: 'Valid email is required' }) });
+      return;
+    }
+    mockUsers.push({ email, status: 'FORCE_CHANGE_PASSWORD', createdAt: new Date().toISOString() });
+    console.log(`[Mock Cognito] Invited user: ${email}`);
+    sendResponse(res, { statusCode: 201, body: JSON.stringify({ email, invited: true }) });
+    return;
+  }
+
+  // Mock Cognito: list users
+  if (url.pathname === '/api/admin/users' && req.method === 'GET') {
+    const authHeader = req.headers.authorization;
+    if (!authHeader?.startsWith('Bearer ')) {
+      sendResponse(res, { statusCode: 401, body: JSON.stringify({ error: 'Unauthorized' }) });
+      return;
+    }
+    sendResponse(res, { statusCode: 200, body: JSON.stringify(mockUsers) });
     return;
   }
 
