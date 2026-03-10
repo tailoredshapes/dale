@@ -176,10 +176,10 @@ describe('handleCreateRoom', () => {
     const body = JSON.parse(result.body);
     expect(body.roomId).toBe('meshql-minimal-room');
 
-    // Room without payment link should be inactive
+    // Room defaults to active: true
     expect(mockedCreateRoom).toHaveBeenCalledWith(expect.objectContaining({
       name: 'Minimal Room',
-      active: false,
+      active: true,
     }));
   });
 
@@ -237,13 +237,13 @@ describe('handleCreateRoom', () => {
     expect(result.statusCode).toBe(201);
   });
 
-  it('creates room without payment link (starts inactive) (E2E: Room is inactive by default)', async () => {
+  it('creates room without payment link (defaults to active) (E2E: Room is active by default)', async () => {
     mockedCreateRoom.mockResolvedValue({
       id: 'meshql-no-link-room',
       tenant_id: 'tenant-1',
       name: 'No Link Room',
       payment_link: '',
-      active: false,
+      active: true,
     });
 
     const result = await handleCreateRoom(AUTH, JSON.stringify({ name: 'No Link Room' }));
@@ -251,10 +251,10 @@ describe('handleCreateRoom', () => {
     const body = JSON.parse(result.body);
     expect(body.roomId).toBe('meshql-no-link-room');
 
-    // Verify room was created with active: false
+    // Verify room was created with active: true (default)
     expect(mockedCreateRoom).toHaveBeenCalledWith(expect.objectContaining({
       name: 'No Link Room',
-      active: false,
+      active: true,
     }));
   });
 });
