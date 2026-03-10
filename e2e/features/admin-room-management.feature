@@ -112,9 +112,9 @@ Feature: Admin Room Management — Exhaustive
     Then the room should have name "My Community Group"
 
   @auth
-  Scenario: Room is inactive by default until payment link added
-    Given I have onboarded a tenant with display name "Rooms Default Inactive"
+  Scenario: Room is active by default on creation
+    Given I have onboarded a tenant with display name "Rooms Default Active"
     When I create a room with:
       | name | No Link Room |
     When I send an authenticated GET request to the created room
-    Then the room should not be active
+    Then the room should be active
