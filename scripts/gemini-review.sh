@@ -42,7 +42,8 @@ echo "Sending review request to Gemini CLI..."
 
 PROMPT="You are a QA/BA reviewer. Given these Gherkin feature files (@${FEATURES_FILE}) and this implementation diff (@${DIFF_FILE}), does the implementation correctly satisfy the scenarios? List any scenarios that are broken, missing, or incorrectly implemented. Be specific and terse. If everything looks correct, respond with exactly: LGTM"
 
-REVIEW=$(gemini "$PROMPT" 2>&1)
+# Run as tmarsh who has gemini credentials; unset OpenClaw workspace env vars to avoid path issues
+REVIEW=$(sudo -u tmarsh env HOME=/home/tmarsh GEMINI_CLI_IDE_WORKSPACE_PATH= gemini "$PROMPT" 2>&1)
 
 echo "=== Gemini QA Review ==="
 echo "$REVIEW"
