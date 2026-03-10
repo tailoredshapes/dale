@@ -29,27 +29,43 @@ export async function handler(
     return { statusCode: 500, body: 'Tenant configuration error' };
   }
 
-  if (!tenantSecrets.stripeSecretKey || !tenantSecrets.stripeWebhookSecret) {
+  const skipVerify = process.env.SKIP_STRIPE_SIGNATURE_VERIFY === 'true';
+
+  if (!skipVerify && (!tenantSecrets.stripeSecretKey || !tenantSecrets.stripeWebhookSecret)) {
     return { statusCode: 400, body: 'Stripe not configured for this tenant' };
   }
 
-  const stripe = new Stripe(tenantSecrets.stripeSecretKey);
-
-  const signature = event.headers['stripe-signature'];
-  if (!signature || !event.body) {
-    return { statusCode: 400, body: 'Missing signature or body' };
-  }
+  const stripe = new Stripe(tenantSecrets.stripeSecretKey || 'sk_test_fake');
 
   let stripeEvent: Stripe.Event;
-  try {
-    stripeEvent = stripe.webhooks.constructEvent(
-      event.body,
-      signature,
-      tenantSecrets.stripeWebhookSecret,
-    );
-  } catch (err) {
-    console.error('Stripe signature verification failed:', err);
-    return { statusCode: 400, body: 'Invalid signature' };
+
+  if (skipVerify) {
+    // Staging/local mode: skip signature verification, parse body directly
+    if (!event.body) {
+      return { statusCode: 400, body: 'Missing body' };
+    }
+    try {
+      stripeEvent = JSON.parse(event.body) as Stripe.Event;
+    } catch (err) {
+      console.error('Failed to parse Stripe event body:', err);
+      return { statusCode: 400, body: 'Invalid JSON body' };
+    }
+  } else {
+    const signature = event.headers['stripe-signature'];
+    if (!signature || !event.body) {
+      return { statusCode: 400, body: 'Missing signature or body' };
+    }
+
+    try {
+      stripeEvent = stripe.webhooks.constructEvent(
+        event.body,
+        signature,
+        tenantSecrets.stripeWebhookSecret,
+      );
+    } catch (err) {
+      console.error('Stripe signature verification failed:', err);
+      return { statusCode: 400, body: 'Invalid signature' };
+    }
   }
 
   try {
