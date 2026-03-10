@@ -47,7 +47,7 @@ export async function handleCreateRoom(
   auth: AuthContext,
   body: string,
 ): Promise<{ statusCode: number; body: string }> {
-  let parsed: { name: string; description?: string; paymentLink?: string; paypalPaymentLink?: string; priceDescription?: string };
+  let parsed: { name: string; description?: string; telegramGroupId?: string; paymentLink?: string; paypalPaymentLink?: string; priceDescription?: string; isActive?: boolean };
   try {
     parsed = JSON.parse(body);
   } catch {
@@ -58,18 +58,19 @@ export async function handleCreateRoom(
     return { statusCode: 400, body: JSON.stringify({ error: 'Missing required field: name' }) };
   }
 
-  // Room is active only if at least one payment link is provided
-  const hasPaymentLink = !!(parsed.paymentLink || parsed.paypalPaymentLink);
+  // Active defaults to true; only false if explicitly set to false
+  const active = parsed.isActive !== false;
 
   // Let meshql-rs restlette generate the ID
   const room = await createRoom({
     tenant_id: auth.tenantId,
     name: parsed.name,
     description: parsed.description,
+    telegram_group_id: parsed.telegramGroupId,
     payment_link: parsed.paymentLink ?? '',
     paypal_payment_link: parsed.paypalPaymentLink,
     price_description: parsed.priceDescription,
-    active: hasPaymentLink,
+    active,
   });
 
   return {
@@ -89,7 +90,7 @@ export async function handleUpdateRoom(
     return { statusCode: 404, body: JSON.stringify({ error: 'Room not found' }) };
   }
 
-  let parsed: { name?: string; description?: string; paymentLink?: string; paypalPaymentLink?: string; priceDescription?: string; isActive?: boolean };
+  let parsed: { name?: string; description?: string; telegramGroupId?: string; paymentLink?: string; paypalPaymentLink?: string; priceDescription?: string; isActive?: boolean };
   try {
     parsed = JSON.parse(body);
   } catch {
@@ -100,6 +101,7 @@ export async function handleUpdateRoom(
   const updates: Record<string, unknown> = {};
   if (parsed.name !== undefined) updates.name = parsed.name;
   if (parsed.description !== undefined) updates.description = parsed.description;
+  if (parsed.telegramGroupId !== undefined) updates.telegram_group_id = parsed.telegramGroupId;
   if (parsed.paymentLink !== undefined) updates.payment_link = parsed.paymentLink;
   if (parsed.paypalPaymentLink !== undefined) updates.paypal_payment_link = parsed.paypalPaymentLink;
   if (parsed.priceDescription !== undefined) updates.price_description = parsed.priceDescription;
