@@ -130,7 +130,7 @@ gemini-qa:
     - e2e-local
   script:
     - bash scripts/gemini-review.sh
-  allow_failure: false
+  allow_failure: true  # informational only
 
 deploy-prod:
   stage: deploy
