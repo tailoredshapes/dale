@@ -54,10 +54,8 @@ services:
     - 8096:80
     volumes:
     - ./staging-nginx.conf:/etc/nginx/conf.d/default.conf:ro
-    - ./web:/usr/share/nginx/html/web:ro
-    - ./site/admin:/usr/share/nginx/html/admin:ro
-    - ./site/consumer:/usr/share/nginx/html/consumer:ro
-    - ./site/creator:/usr/share/nginx/html/creator:ro
+    - ./web/dist:/usr/share/nginx/html/web:ro
+    - ./site:/usr/share/nginx/html/site:ro
     depends_on:
       dale-api:
         condition: service_healthy
