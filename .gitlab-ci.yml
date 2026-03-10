@@ -131,8 +131,6 @@ gemini-qa:
   script:
     - bash scripts/gemini-review.sh
   allow_failure: false
-  rules:
-    - if: $CI_PIPELINE_SOURCE == "push" || $CI_PIPELINE_SOURCE == "merge_request_event"
 
 deploy-prod:
   stage: deploy
@@ -180,8 +178,11 @@ deploy-prod:
 staging-up:
   stage: deploy
   tags: [shell]
+  needs:
+    - gemini-qa
   rules:
-    - when: manual
+    - if: $CI_COMMIT_BRANCH != "main"
+      when: on_success
   script:
     - docker compose --profile staging up -d --build
     - echo "Staging is live at https://dale.poundit.co.uk"
