@@ -2,6 +2,9 @@
 set -euo pipefail
 
 # Gemini QA/BA review — pipes feature files + diff into the gemini CLI (no API key needed)
+# Must run from the project root (not from OpenClaw workspace) so gemini doesn't inherit
+# a non-existent PWD and add it to projects.json
+cd "$(git rev-parse --show-toplevel)"
 
 # Collect feature files (skip node_modules)
 FEATURE_FILES=$(find . -name '*.feature' -not -path '*/node_modules/*' 2>/dev/null || true)
@@ -11,39 +14,34 @@ if [ -z "$FEATURE_FILES" ]; then
   exit 0
 fi
 
-# Build feature content (truncate to ~80k chars to stay under context limits)
+# Build feature content (truncate to ~60k chars to stay under context limits)
 FEATURES=""
 for f in $FEATURE_FILES; do
   FEATURES+="--- $f ---"$'\n'
   FEATURES+="$(cat "$f")"$'\n\n'
 done
-FEATURES="${FEATURES:0:80000}"
+FEATURES="${FEATURES:0:60000}"
 
-# Get diff against base
+# Get diff against base (implementation files only)
 BASE="${CI_MERGE_REQUEST_DIFF_BASE_SHA:-origin/main}"
-DIFF=$(git diff "$BASE" -- '*.ts' '*.tsx' '*.js' '*.rs' '*.yml' '*.yaml' '*.json' ':!package-lock.json' ':!**/package-lock.json' 2>/dev/null || true)
+DIFF=$(git diff "$BASE" -- '*.ts' '*.tsx' '*.js' '*.rs' '*.yml' '*.yaml' '*.json' \
+  ':!package-lock.json' ':!**/package-lock.json' 2>/dev/null || true)
 
 if [ -z "$DIFF" ]; then
   echo "No implementation changes detected — skipping review"
   exit 0
 fi
 
-# Write feature files and diff to temp files for gemini CLI
-TMPDIR_REVIEW=$(mktemp -d)
-trap 'rm -rf "$TMPDIR_REVIEW"' EXIT
-
-FEATURES_FILE="$TMPDIR_REVIEW/features.txt"
-DIFF_FILE="$TMPDIR_REVIEW/diff.txt"
-
-printf '%s' "$FEATURES" > "$FEATURES_FILE"
-printf '%s' "${DIFF:0:80000}" > "$DIFF_FILE"
+DIFF="${DIFF:0:40000}"
 
 echo "Sending review request to Gemini CLI..."
 
-PROMPT="You are a QA/BA reviewer. Given these Gherkin feature files (@${FEATURES_FILE}) and this implementation diff (@${DIFF_FILE}), does the implementation correctly satisfy the scenarios? List any scenarios that are broken, missing, or incorrectly implemented. Be specific and terse. If everything looks correct, respond with exactly: LGTM"
-
-# Run as tmarsh who has gemini credentials; unset OpenClaw workspace env vars to avoid path issues
-REVIEW=$(sudo -u tmarsh env HOME=/home/tmarsh GEMINI_CLI_IDE_WORKSPACE_PATH= gemini "$PROMPT" 2>&1)
+# Pipe content directly to gemini via stdin — avoids @file resolution issues
+REVIEW=$(printf '%s\n\n%s\n\n%s' \
+  "=== GHERKIN FEATURE FILES ===" \
+  "$FEATURES" \
+  "=== IMPLEMENTATION DIFF ===$DIFF" \
+  | gemini "You are a QA/BA reviewer. Given the Gherkin feature files and implementation diff provided in stdin, does the implementation correctly satisfy the scenarios? List any scenarios that are broken, missing, or incorrectly implemented. Be specific and terse. If everything looks correct, respond with exactly: LGTM" 2>&1)
 
 echo "=== Gemini QA Review ==="
 echo "$REVIEW"
@@ -62,8 +60,7 @@ if [ -n "${CI_MERGE_REQUEST_IID:-}" ] && [ -n "${CI_PROJECT_ID:-}" ]; then
 fi
 
 # Check verdict
-TRIMMED=$(echo "$REVIEW" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
-if echo "$TRIMMED" | grep -iq 'lgtm'; then
+if echo "$REVIEW" | grep -iq '^lgtm$\|^lgtm[[:space:]]*$'; then
   echo "✅ Review passed"
   exit 0
 else
