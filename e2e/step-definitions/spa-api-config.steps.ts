@@ -60,14 +60,6 @@ When<DaleWorld>('I request the admin API health endpoint', async function () {
   };
 });
 
-Then<DaleWorld>('the response status should be {int} or {int}', async function (a: number, b: number) {
-  if (this.config.localMode) return 'skipped';
-  assert.ok(
-    this.lastResponse?.status === a || this.lastResponse?.status === b,
-    `Expected status ${a} or ${b}, got ${this.lastResponse?.status}`,
-  );
-});
-
 Then<DaleWorld>('the response body should be valid JSON', async function () {
   if (this.config.localMode) return 'skipped';
   try {
