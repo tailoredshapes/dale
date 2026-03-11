@@ -158,13 +158,13 @@ export function SetupRoomWizard({ hasTenant, onComplete }: SetupRoomWizardProps)
         />
       </div>
       {!hasPaymentLink && (
-        <p className="help-text" style={{ color: 'var(--pending)' }}>
-          You need at least one payment link so subscribers can pay you.
+        <p className="help-text" style={{ color: 'var(--text-dim)' }}>
+          You can add payment links later from Settings.
         </p>
       )}
       <div style={{ display: 'flex', gap: '0.5rem' }}>
         {!hasTenant && <button className="btn-secondary" onClick={() => setStep(0)}>Back</button>}
-        <button className="btn-primary" onClick={handleSubmit} disabled={!roomName || !hasPaymentLink || submitting}>
+        <button className="btn-primary" onClick={handleSubmit} disabled={!roomName || submitting}>
           {submitting ? 'Creating...' : 'Create Group'}
         </button>
       </div>
