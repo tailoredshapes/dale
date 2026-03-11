@@ -38,6 +38,8 @@ export class AdminApi extends Construct {
   constructor(scope: Construct, id: string, props: AdminApiProps) {
     super(scope, id);
 
+    const loginUrl = props.envName === 'prod' ? 'https://dalegram.com' : `https://dale-admin.poundit.co.uk`;
+
     // Cognito User Pool
     this.userPool = new cognito.UserPool(this, 'UserPool', {
       userPoolName: `dale-creators-${props.envName}`,
@@ -48,6 +50,21 @@ export class AdminApi extends Construct {
         email: { required: true, mutable: true },
       },
       removalPolicy: cdk.RemovalPolicy.RETAIN,
+      userInvitation: {
+        emailSubject: "You've been invited to Dalegram",
+        emailBody: `
+<p>Hi,</p>
+<p>You've been invited to <strong>Dalegram</strong> — the platform for paid Telegram communities.</p>
+<p><a href="${loginUrl}" style="font-size:16px;font-weight:bold;">Sign in to Dalegram →</a></p>
+<p>Use these credentials on your first login:</p>
+<table style="border-collapse:collapse;margin:16px 0">
+  <tr><td style="padding:4px 12px 4px 0;color:#666">Email</td><td style="padding:4px 0"><strong>{username}</strong></td></tr>
+  <tr><td style="padding:4px 12px 4px 0;color:#666">Temporary password</td><td style="padding:4px 0"><code style="background:#f4f4f4;padding:2px 8px;border-radius:4px;font-size:15px">{####}</code></td></tr>
+</table>
+<p>You'll be asked to set a new password after signing in.</p>
+<p style="color:#999;font-size:12px">If you didn't expect this invitation, you can ignore this email.</p>
+`,
+      },
     });
 
     // Google identity provider
