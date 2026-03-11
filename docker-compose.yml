@@ -30,7 +30,7 @@ services:
     environment:
     - MESHQL_URL=http://meshql-rs:8080
     - AWS_REGION=us-east-1
-    - TELEGRAM_WEBHOOK_URL=https://dale-webhook.tildarc.com
+    - TELEGRAM_WEBHOOK_URL=https://dale-webhook.poundit.co.uk
     - STRIPE_WEBHOOK_URL=http://localhost:3002
     - PAYPAL_WEBHOOK_URL=http://localhost:3003
     - PAYPAL_BASE_URL=https://api-m.sandbox.paypal.com
