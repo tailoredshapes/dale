@@ -172,7 +172,7 @@ export class SubscriptionCard extends HTMLElement {
     const providerEl = this.shadowRoot!.querySelector('.provider-badge')!;
     const inviteEl = this.shadowRoot!.querySelector('.invite-link')!;
     const cancelBtn = this.shadowRoot!.querySelector('.cancel-btn') as HTMLButtonElement;
-    const actionsEl = this.shadowRoot!.querySelector('.actions')!;
+    const actionsEl = this.shadowRoot!.querySelector('.actions') as HTMLElement;
 
     const status = this.cancelling ? 'cancelling' : this.subscription.status;
 
