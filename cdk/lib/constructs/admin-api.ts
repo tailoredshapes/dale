@@ -41,7 +41,7 @@ export class AdminApi extends Construct {
     // Cognito User Pool
     this.userPool = new cognito.UserPool(this, 'UserPool', {
       userPoolName: `dale-creators-${props.envName}`,
-      selfSignUpEnabled: false,
+      selfSignUpEnabled: true,
       signInAliases: { email: true },
       autoVerify: { email: true },
       standardAttributes: {
