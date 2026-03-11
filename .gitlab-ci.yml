@@ -180,6 +180,23 @@ deploy-prod:
     # Stage bootstrap where CDK tryBundle picks it up
     - cp backend/target/lambda/dale-backend/bootstrap backend/target/release/dale-backend
     - npx cdk deploy Dale-Prod -c env=prod --require-approval never --outputs-file cdk-outputs.json
+    # Build + deploy SPA with prod URLs baked in
+    - |
+      WEB_BUCKET=$(python3 -c "import json; d=json.load(open('cdk-outputs.json')); print(d.get('Dale-Prod',{}).get('WebBucketName',''))")
+      CF_DIST=$(python3 -c "import json; d=json.load(open('cdk-outputs.json')); print(d.get('Dale-Prod',{}).get('DistributionId',''))")
+      cd web && npm ci
+      VITE_USER_POOL_ID=$COGNITO_USER_POOL_ID \
+      VITE_USER_POOL_CLIENT_ID=$COGNITO_CLIENT_ID \
+      VITE_COGNITO_DOMAIN=dale-prod-890764614009.auth.us-east-1.amazoncognito.com \
+      VITE_REDIRECT_SIGN_IN=https://dalegram.com/callback \
+      VITE_REDIRECT_SIGN_OUT=https://dalegram.com/ \
+      npm run build
+      cd ..
+      aws s3 sync web/dist/ s3://$WEB_BUCKET/ --delete \
+        --cache-control "public, max-age=31536000, immutable" --exclude "index.html"
+      aws s3 cp web/dist/index.html s3://$WEB_BUCKET/index.html \
+        --cache-control "no-cache, no-store, must-revalidate"
+      [ -n "$CF_DIST" ] && aws cloudfront create-invalidation --distribution-id $CF_DIST --paths "/*" || true
   artifacts:
     paths:
       - cdk-outputs.json
