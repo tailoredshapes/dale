@@ -53,6 +53,7 @@ function loadConfig() {
     stripeWebhookUrl:   get('E2E_STRIPE_WEBHOOK_URL',    'StripeWebhookUrl'),
     paypalWebhookUrl:   get('E2E_PAYPAL_WEBHOOK_URL',    'PayPalWebhookUrl'),
     webDistributionUrl: get('E2E_WEB_DISTRIBUTION_URL',  'WebDistributionUrl'),
+    cloudFrontDomain:   get('E2E_CLOUDFRONT_DOMAIN',     'CloudFrontDomain'),
     userPoolId:         get('E2E_USER_POOL_ID',          'UserPoolId'),
     userPoolClientId:   get('E2E_USER_POOL_CLIENT_ID',   'UserPoolClientId'),
     region:             process.env.AWS_REGION ?? 'us-east-1',
@@ -128,6 +129,32 @@ async function checkSpa(cfg: ReturnType<typeof loadConfig>) {
     } else {
       fail('SPA deep-link', '200 but body is not HTML — SPA routing may be broken');
     }
+  }
+
+  // OAuth redirect URL check — the JS bundle must NOT contain the raw CloudFront domain
+  // as a redirect URI. If it does, Google sign-in will silently fail because Cognito
+  // only allows the custom domain (dalegram.com) in its callback list.
+  const jsSrcMatch = res.body.match(/src="([^"]+\.js)"/);
+  if (jsSrcMatch) {
+    const jsUrl = jsSrcMatch[1].startsWith('http') ? jsSrcMatch[1] : `${url}${jsSrcMatch[1]}`;
+    const jsRes = await probe('SPA OAuth config', jsUrl, 'GET', { expectStatus: [200] });
+    if (jsRes) {
+      const cfDomain = cfg.cloudFrontDomain ?? '';
+      // The bundle must reference a non-CloudFront redirect URI
+      // (i.e. the custom domain should be baked in, not the raw *.cloudfront.net URL)
+      const hasCfRedirect = cfDomain && jsRes.body.includes(cfDomain) && jsRes.body.includes('redirectSign');
+      if (hasCfRedirect) {
+        fail(
+          'SPA OAuth config',
+          `JS bundle contains cloudfront.net redirect URI (${cfDomain}). ` +
+          `OAuth will fail — rebuild SPA with the custom domain URL baked in.`
+        );
+      } else {
+        pass('SPA OAuth config', 'Redirect URIs do not contain raw CloudFront domain');
+      }
+    }
+  } else {
+    console.log('  ⏭️  SPA OAuth config: could not locate JS bundle URL in index.html — skipping');
   }
 }
 
