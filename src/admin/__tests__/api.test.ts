@@ -30,6 +30,14 @@ vi.mock('../routes/webhooks.js', () => ({
 vi.mock('../routes/invite.js', () => ({
   handleInviteUser: vi.fn().mockResolvedValue({ statusCode: 201, body: '{"email":"a@b.com","invited":true}' }),
   handleListUsers: vi.fn().mockResolvedValue({ statusCode: 200, body: '[]' }),
+  handleRedeemInvite: vi.fn().mockResolvedValue({ statusCode: 200, body: '{"email":"a@b.com","temporaryPassword":"Test123"}' }),
+  createCognitoUser: vi.fn().mockResolvedValue(undefined),
+}));
+
+vi.mock('../../db/invite-tokens.js', () => ({
+  createInviteToken: vi.fn().mockResolvedValue({}),
+  getInviteToken: vi.fn().mockResolvedValue(null),
+  markTokenUsed: vi.fn().mockResolvedValue(undefined),
 }));
 
 vi.mock('../../db/webhook-secrets.js', () => ({

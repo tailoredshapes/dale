@@ -10,6 +10,9 @@ export class DaleWorld extends QuickPickleWorld {
   invoice: Partial<Stripe.Invoice> | null = null;
   subscription: Partial<Stripe.Subscription> | null = null;
 
+  // Shared response state for all step definitions
+  response: { statusCode: number; body: string } | null = null;
+
   constructor(context: TestContext, info: any) {
     super(context, info);
   }

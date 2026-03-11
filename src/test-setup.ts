@@ -4,3 +4,4 @@ process.env.STRIPE_WEBHOOK_URL = 'https://test.lambda-url.us-east-1.on.aws/strip
 process.env.PAYPAL_WEBHOOK_URL = 'https://test.lambda-url.us-east-1.on.aws/paypal';
 process.env.PAYPAL_BASE_URL = 'https://api-m.sandbox.paypal.com';
 process.env.COGNITO_USER_POOL_ID = 'us-east-1_TestPool';
+process.env.WEB_APP_URL = 'https://test.dalegram.com';

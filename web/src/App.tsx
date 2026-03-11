@@ -2,6 +2,7 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider } from './auth/AuthProvider';
 import { ProtectedRoute } from './auth/ProtectedRoute';
 import { CallbackPage } from './auth/CallbackPage';
+import { AcceptInvitePage } from './pages/AcceptInvitePage';
 import { DashboardPage } from './pages/DashboardPage';
 import { RoomListPage } from './pages/RoomListPage';
 import { RoomDetailPage } from './pages/RoomDetailPage';
@@ -14,6 +15,7 @@ export default function App() {
       <AuthProvider>
         <Routes>
           <Route path="/callback" element={<CallbackPage />} />
+          <Route path="/accept-invite" element={<AcceptInvitePage />} />
           <Route element={<ProtectedRoute />}>
             <Route element={<Layout />}>
               <Route path="/" element={<DashboardPage />} />

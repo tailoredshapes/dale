@@ -29,9 +29,7 @@ import { setWebhook } from '../../telegram/api.js';
 
 let cognitoSub: string;
 let requestBody: Record<string, string>;
-let response: { statusCode: number; body: string };
 let createdTenantId: string;
-let setWebhookCalled: boolean;
 
 const mockDeps = {
   generateSecret: () => 'test-webhook-secret',
@@ -43,12 +41,12 @@ const mockDeps = {
   paypalBaseUrl: 'https://api.sandbox.paypal.com',
 };
 
-Before(async () => {
+Before(async (world: DaleWorld) => {
   vi.clearAllMocks();
   cognitoSub = 'cognito-sub-123';
   requestBody = {};
   createdTenantId = 'tenant-generated-id';
-  setWebhookCalled = false;
+  world.response = null;
 
   vi.mocked(createTenant).mockResolvedValue({
     id: createdTenantId,
@@ -63,10 +61,7 @@ Before(async () => {
 });
 
 // ── Givens ───────────────────────────────────────────────────────────────────
-
-Given('the Dale system is running', async () => {
-  // no-op: mocks are the system
-});
+// Note: Common Givens are in common.steps.ts
 
 Given('no tenant exists for the authenticated user', async () => {
   vi.mocked(getTenantByCognitoSub).mockResolvedValue(null);
@@ -89,13 +84,6 @@ Given('I have an existing tenant with a Telegram bot configured', async () => {
     id: createdTenantId,
     display_name: 'Test Brand',
     telegram_bot_token: 'old-token-123:ABC',
-  } as any);
-});
-
-Given('I have an existing tenant', async () => {
-  vi.mocked(getTenantById).mockResolvedValue({
-    id: createdTenantId,
-    display_name: 'Test Brand',
   } as any);
 });
 
@@ -125,33 +113,33 @@ Given('the PayPal API returns an error for webhook registration', async () => {
 
 // ── Whens ────────────────────────────────────────────────────────────────────
 
-When('I POST to {string} with:', async (_world: DaleWorld, path: string, table: any) => {
+When('I POST to {string} with:', async (world: DaleWorld, path: string, table: any) => {
   const rows: string[][] = table.raw ? table.raw() : table;
   requestBody = Object.fromEntries(rows.map((r: string[]) => [r[0], r[1]]));
 
   if (path === '/api/tenant/onboard') {
-    response = await handleOnboard(cognitoSub, JSON.stringify(requestBody), mockDeps);
+    world.response = await handleOnboard(cognitoSub, JSON.stringify(requestBody), mockDeps);
   }
 });
 
-When('I POST to {string} with an empty body', async (_world: DaleWorld, path: string) => {
+When('I POST to {string} with an empty body', async (world: DaleWorld, path: string) => {
   if (path === '/api/tenant/onboard') {
-    response = await handleOnboard(cognitoSub, JSON.stringify({}), mockDeps);
+    world.response = await handleOnboard(cognitoSub, JSON.stringify({}), mockDeps);
   }
 });
 
-When('I PUT to {string} with:', async (_world: DaleWorld, path: string, table: any) => {
+When('I PUT to {string} with:', async (world: DaleWorld, path: string, table: any) => {
   const rows: string[][] = table.raw ? table.raw() : table;
   requestBody = Object.fromEntries(rows.map((r: string[]) => [r[0], r[1]]));
   const auth = { tenantId: createdTenantId, cognitoSub };
 
   if (path === '/api/tenant/telegram') {
-    response = await handleConfigureTelegram(auth, JSON.stringify(requestBody), {
+    world.response = await handleConfigureTelegram(auth, JSON.stringify(requestBody), {
       setWebhook: mockDeps.setWebhook,
       telegramWebhookUrl: mockDeps.telegramWebhookUrl,
     });
   } else if (path === '/api/tenant/payment') {
-    response = await handleConfigurePayment(auth, JSON.stringify(requestBody), {
+    world.response = await handleConfigurePayment(auth, JSON.stringify(requestBody), {
       registerPayPalWebhook: mockDeps.registerPayPalWebhook,
       stripeWebhookUrl: mockDeps.stripeWebhookUrl,
       paypalWebhookUrl: mockDeps.paypalWebhookUrl,
@@ -160,16 +148,16 @@ When('I PUT to {string} with:', async (_world: DaleWorld, path: string, table: a
   }
 });
 
-When('I PUT to {string} with an empty body', async (_world: DaleWorld, path: string) => {
+When('I PUT to {string} with an empty body', async (world: DaleWorld, path: string) => {
   const auth = { tenantId: createdTenantId, cognitoSub };
 
   if (path === '/api/tenant/telegram') {
-    response = await handleConfigureTelegram(auth, JSON.stringify({}), {
+    world.response = await handleConfigureTelegram(auth, JSON.stringify({}), {
       setWebhook: mockDeps.setWebhook,
       telegramWebhookUrl: mockDeps.telegramWebhookUrl,
     });
   } else if (path === '/api/tenant/payment') {
-    response = await handleConfigurePayment(auth, JSON.stringify({}), {
+    world.response = await handleConfigurePayment(auth, JSON.stringify({}), {
       registerPayPalWebhook: mockDeps.registerPayPalWebhook,
       stripeWebhookUrl: mockDeps.stripeWebhookUrl,
       paypalWebhookUrl: mockDeps.paypalWebhookUrl,
@@ -178,13 +166,13 @@ When('I PUT to {string} with an empty body', async (_world: DaleWorld, path: str
   }
 });
 
-When('I PUT to {string} with only:', async (_world: DaleWorld, path: string, table: any) => {
+When('I PUT to {string} with only:', async (world: DaleWorld, path: string, table: any) => {
   const rows: string[][] = table.raw ? table.raw() : table;
   requestBody = Object.fromEntries(rows.map((r: string[]) => [r[0], r[1]]));
   const auth = { tenantId: createdTenantId, cognitoSub };
 
   if (path === '/api/tenant/payment') {
-    response = await handleConfigurePayment(auth, JSON.stringify(requestBody), {
+    world.response = await handleConfigurePayment(auth, JSON.stringify(requestBody), {
       registerPayPalWebhook: mockDeps.registerPayPalWebhook,
       stripeWebhookUrl: mockDeps.stripeWebhookUrl,
       paypalWebhookUrl: mockDeps.paypalWebhookUrl,
@@ -193,28 +181,8 @@ When('I PUT to {string} with only:', async (_world: DaleWorld, path: string, tab
   }
 });
 
-// ── Thens ────────────────────────────────────────────────────────────────────
-
-Then('the response status is {int}', async (_world: DaleWorld, status: number) => {
-  expect(response.statusCode).toBe(status);
-});
-
-Then('the response contains a {string}', async (_world: DaleWorld, key: string) => {
-  const body = JSON.parse(response.body);
-  expect(body).toHaveProperty(key);
-  expect(body[key]).toBeTruthy();
-});
-
-Then('the response contains error {string}', async (_world: DaleWorld, msg: string) => {
-  const body = JSON.parse(response.body);
-  expect(body.error).toContain(msg);
-});
-
-Then('the response contains {string}: {word}', async (_world: DaleWorld, key: string, value: string) => {
-  const body = JSON.parse(response.body);
-  const expected = value === 'true' ? true : value === 'false' ? false : value;
-  expect(body[key]).toBe(expected);
-});
+// ── Thens (onboarding-specific) ──────────────────────────────────────────────
+// Note: Common Thens are in common.steps.ts
 
 Then('no Telegram webhook is registered', async () => {
   expect(mockDeps.setWebhook).not.toHaveBeenCalled();

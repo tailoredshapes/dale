@@ -60,6 +60,7 @@ export interface PlatformConfig {
   stripeWebhookUrl: string;
   paypalWebhookUrl: string;
   paypalBaseUrl: string;
+  webAppUrl: string;
 }
 
 // --- Telegram types ---
