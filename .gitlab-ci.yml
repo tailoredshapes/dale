@@ -192,7 +192,10 @@ staging-up:
     - gemini-qa
   when: manual
   script:
-    - cd backend && cargo build --release && cd ..
+    - pip3 install cargo-lambda --break-system-packages --quiet
+    - cd backend && cargo lambda build --release --arm64 && cd ..
+    # Copy to target/release so CDK local bundling finds it at the expected path
+    - cp backend/target/lambda/dale-backend/bootstrap backend/target/release/dale-backend
     - docker compose --profile staging up -d --build
     - echo "Staging is live at https://dale.poundit.co.uk"
 

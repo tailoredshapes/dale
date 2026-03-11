@@ -1,5 +1,5 @@
 // meshql-rs client configuration
-export const MESHQL_URL = process.env.MESHQL_URL || 'http://localhost:8080';
+export const MESHQL_URL = (process.env.MESHQL_URL || 'http://localhost:8080').replace(/\/$/, '');
 
 export interface GraphQLResponse<T> {
   data?: T;
