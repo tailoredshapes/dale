@@ -80,7 +80,7 @@ e2e-local:
           rm -rf "$TARGET"
         fi
         if [ ! -d "$TARGET" ]; then
-          git clone http://oauth2:${GITLAB_TOKEN}@192.168.7.42:8929/tailoredshapes/$repo.git "$TARGET"
+          git clone http://gitlab-ci-token:${CI_JOB_TOKEN}@192.168.7.42:8929/tailoredshapes/$repo.git "$TARGET"
         else
           git -C "$TARGET" pull --ff-only || true
         fi
@@ -169,7 +169,7 @@ deploy-prod:
           rm -rf "$TARGET"
         fi
         if [ ! -d "$TARGET" ]; then
-          git clone http://oauth2:${GITLAB_TOKEN}@192.168.7.42:8929/tailoredshapes/$repo.git "$TARGET"
+          git clone http://gitlab-ci-token:${CI_JOB_TOKEN}@192.168.7.42:8929/tailoredshapes/$repo.git "$TARGET"
         else
           git -C "$TARGET" pull --ff-only || true
         fi
