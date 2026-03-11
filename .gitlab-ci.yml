@@ -5,6 +5,7 @@ stages:
   - e2e
   - qa-review
   - deploy
+  - smoke-test
 
 variables:
   GIT_CLEAN_FLAGS: -ffdx -e e2e/node_modules -e node_modules
@@ -173,7 +174,11 @@ deploy-prod:
         fi
       done
     - cd backend && cargo build --release && cd ..
-    - npx cdk deploy Dale-Prod -c env=prod --require-approval never
+    - npx cdk deploy Dale-Prod -c env=prod --require-approval never --outputs-file cdk-outputs.json
+  artifacts:
+    paths:
+      - cdk-outputs.json
+    expire_in: 1 hour
 
 # ── Staging (on-demand, manual) ───────────────────────
 
@@ -198,3 +203,36 @@ staging-down:
   script:
     - docker compose --profile staging down -v
     - echo "Staging is down"
+
+# ── Smoke Tests ───────────────────────────────────────
+
+smoke-test-prod:
+  stage: smoke-test
+  needs:
+    - deploy-prod
+  variables:
+    AWS_ACCESS_KEY_ID: $AWS_ACCESS_KEY_ID
+    AWS_SECRET_ACCESS_KEY: $AWS_SECRET_ACCESS_KEY
+    AWS_DEFAULT_REGION: $AWS_DEFAULT_REGION
+    STACK: Dale-Prod
+  script:
+    - npm ci
+    - npx tsx scripts/smoke-test.ts
+  only:
+    - main
+
+smoke-test-staging:
+  stage: smoke-test
+  tags: [shell]
+  needs:
+    - staging-up
+  variables:
+    SMOKE_SKIP_AUTH: "true"
+    E2E_WEB_DISTRIBUTION_URL: https://dale.poundit.co.uk
+    E2E_ADMIN_API_URL: https://dale-api.poundit.co.uk
+  script:
+    - npm ci
+    - npx tsx scripts/smoke-test.ts
+  rules:
+    - if: $CI_COMMIT_BRANCH != "main"
+      when: on_success
