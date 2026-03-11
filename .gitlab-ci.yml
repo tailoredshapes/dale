@@ -3,6 +3,7 @@ image: node:20
 stages:
   - test
   - e2e
+  - qa-review
   - deploy
 
 variables:
@@ -71,7 +72,7 @@ e2e-local:
     - |
       PARENT=$(dirname $(pwd))
       for repo in meshql-rs merkql merksql; do
-        TARGET="$PARENT/tailoredshapes/$repo"
+        TARGET="$PARENT/$repo"
         if [ -d "$TARGET" ] && ! git -C "$TARGET" rev-parse --git-dir > /dev/null 2>&1; then
           echo "Removing corrupt/incomplete $repo directory"
           rm -rf "$TARGET"
@@ -87,9 +88,9 @@ e2e-local:
       cd backend
       cargo build --release 2>&1 | tail -5
       cd ..
-    # Start services (isolated by COMPOSE_PROJECT_NAME)
-    - docker compose down -v 2>/dev/null || true
-    - docker compose up -d --build
+    # Start services (isolated by COMPOSE_PROJECT_NAME, no host port bindings)
+    - docker compose -f docker-compose.yml -f docker-compose.ci.yml down -v 2>/dev/null || true
+    - docker compose -f docker-compose.yml -f docker-compose.ci.yml up -d --build
 
     # Wait for API to be healthy (service name dale-api, container name is project-prefixed)
     - |
@@ -118,8 +119,18 @@ e2e-local:
         node:20-alpine \
         sh -c "npm ci && npx cucumber-js --tags 'not @real-telegram and not @cognito-srp and not @tutorial and not @skip'"
   after_script:
-    - docker compose logs || true
-    - docker compose down -v || true
+    - docker compose -f docker-compose.yml -f docker-compose.ci.yml logs || true
+    - docker compose -f docker-compose.yml -f docker-compose.ci.yml down -v || true
+
+gemini-qa:
+  stage: qa-review
+  tags:
+    - shell
+  needs:
+    - e2e-local
+  script:
+    - bash scripts/gemini-review.sh
+  allow_failure: true  # informational only
 
 deploy-prod:
   stage: deploy
@@ -148,7 +159,7 @@ deploy-prod:
     - |
       PARENT=$(dirname $(pwd))
       for repo in meshql-rs merkql merksql; do
-        TARGET="$PARENT/tailoredshapes/$repo"
+        TARGET="$PARENT/$repo"
         if [ -d "$TARGET" ] && ! git -C "$TARGET" rev-parse --git-dir > /dev/null 2>&1; then
           echo "Removing corrupt/incomplete $repo directory"
           rm -rf "$TARGET"
@@ -167,9 +178,13 @@ deploy-prod:
 staging-up:
   stage: deploy
   tags: [shell]
+  needs:
+    - gemini-qa
   rules:
-    - when: manual
+    - if: $CI_COMMIT_BRANCH != "main"
+      when: on_success
   script:
+    - cd backend && cargo build --release && cd ..
     - docker compose --profile staging up -d --build
     - echo "Staging is live at https://dale.poundit.co.uk"
 
