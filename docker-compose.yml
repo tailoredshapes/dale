@@ -30,11 +30,11 @@ services:
     environment:
     - MESHQL_URL=http://meshql-rs:8080
     - AWS_REGION=us-east-1
-    - TELEGRAM_WEBHOOK_URL=http://localhost:3001
+    - TELEGRAM_WEBHOOK_URL=https://dale-webhook.tildarc.com
     - STRIPE_WEBHOOK_URL=http://localhost:3002
     - PAYPAL_WEBHOOK_URL=http://localhost:3003
     - PAYPAL_BASE_URL=https://api-m.sandbox.paypal.com
-    - TELEGRAM_TEST_MODE=true
+    - TELEGRAM_TEST_MODE=false
     - TELEGRAM_API_BASE_URL=http://localhost:3004
     - JWT_SECRET=local-test-secret-key-for-development
     - COGNITO_USER_POOL_ID=local-pool
