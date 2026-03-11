@@ -187,9 +187,7 @@ staging-up:
   tags: [shell]
   needs:
     - gemini-qa
-  rules:
-    - if: $CI_COMMIT_BRANCH != "main"
-      when: on_success
+  when: manual
   script:
     - cd backend && cargo build --release && cd ..
     - docker compose --profile staging up -d --build
@@ -225,7 +223,8 @@ smoke-test-staging:
   stage: smoke-test
   tags: [shell]
   needs:
-    - staging-up
+    - job: staging-up
+      optional: true
   variables:
     SMOKE_SKIP_AUTH: "true"
     E2E_WEB_DISTRIBUTION_URL: https://dale.poundit.co.uk
