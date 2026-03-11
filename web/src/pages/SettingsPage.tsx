@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useTenant } from '../hooks/useTenant';
 import { api } from '../api/client';
-import type { InviteResponse, AdminUser, ConfigurePaymentResponse } from '../api/types';
+import type { InviteResponse, AdminUser, ConfigurePaymentResponse, ConfigureTelegramResponse } from '../api/types';
 
 export function SettingsPage() {
   const { tenant, loading, reload } = useTenant();
@@ -15,6 +15,10 @@ export function SettingsPage() {
   const [inviteStatus, setInviteStatus] = useState<string | null>(null);
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [loadingUsers, setLoadingUsers] = useState(false);
+
+  const [telegramBotToken, setTelegramBotToken] = useState('');
+  const [savingTelegram, setSavingTelegram] = useState(false);
+  const [telegramStatus, setTelegramStatus] = useState<string | null>(null);
 
   const [stripeSecretKey, setStripeSecretKey] = useState('');
   const [stripeWebhookSecret, setStripeWebhookSecret] = useState('');
@@ -49,6 +53,21 @@ export function SettingsPage() {
       await reload();
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function handleSaveTelegram() {
+    if (!telegramBotToken) return;
+    setSavingTelegram(true);
+    setTelegramStatus(null);
+    try {
+      const result = await api.put<ConfigureTelegramResponse>('/api/tenant/telegram', { telegramBotToken });
+      setTelegramStatus(result.webhookRegistered ? 'Bot connected and webhook registered.' : 'Bot saved (webhook registration pending).');
+      setTelegramBotToken('');
+    } catch (err: any) {
+      setTelegramStatus(err.message ?? 'Failed to connect Telegram bot');
+    } finally {
+      setSavingTelegram(false);
     }
   }
 
@@ -188,11 +207,26 @@ export function SettingsPage() {
       </section>
 
       <section style={{ marginBottom: '2rem' }}>
-        <h2>Telegram Webhook</h2>
-        <p>Re-register your bot's webhook with the platform.</p>
-        <button className="btn-primary" onClick={handleRegisterWebhook} disabled={registering}>
-          {registering ? 'Registering...' : 'Register Webhook'}
-        </button>
+        <h2>Telegram Bot</h2>
+        <p>Connect a Telegram bot to manage group access. Get a token from <strong>@BotFather</strong>.</p>
+        <div className="form-group">
+          <label>Bot token:</label>
+          <input
+            type="text"
+            placeholder="123456789:ABCdef..."
+            value={telegramBotToken}
+            onChange={(e) => setTelegramBotToken(e.target.value)}
+          />
+        </div>
+        <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+          <button className="btn-primary" onClick={handleSaveTelegram} disabled={savingTelegram || !telegramBotToken}>
+            {savingTelegram ? 'Connecting...' : 'Connect Bot'}
+          </button>
+          <button className="btn-secondary" onClick={handleRegisterWebhook} disabled={registering} style={{ fontSize: '0.85rem' }}>
+            {registering ? 'Re-registering...' : 'Re-register webhook'}
+          </button>
+        </div>
+        {telegramStatus && <p style={{ marginTop: '0.5rem' }}>{telegramStatus}</p>}
         {webhookStatus && <p style={{ marginTop: '0.5rem' }}>{webhookStatus}</p>}
       </section>
 

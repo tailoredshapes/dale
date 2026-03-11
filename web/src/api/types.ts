@@ -25,7 +25,15 @@ export interface SubscriberResponse {
 
 export interface OnboardRequest {
   displayName: string;
+  telegramBotToken?: string;
+}
+
+export interface ConfigureTelegramRequest {
   telegramBotToken: string;
+}
+
+export interface ConfigureTelegramResponse {
+  webhookRegistered: boolean;
 }
 
 export interface ConfigurePaymentRequest {

@@ -20,12 +20,11 @@ function CollapsibleHelp({ title, children }: { title: string; children: React.R
 }
 
 export function SetupRoomWizard({ hasTenant, onComplete }: SetupRoomWizardProps) {
-  const totalSteps = hasTenant ? 2 : 4;
-  const firstStep = hasTenant ? 2 : 0;
+  const totalSteps = hasTenant ? 1 : 2;
+  const firstStep = hasTenant ? 1 : 0;
 
   const [step, setStep] = useState(firstStep);
   const [displayName, setDisplayName] = useState('');
-  const [botToken, setBotToken] = useState('');
   const [roomName, setRoomName] = useState('');
   const [paymentLink, setPaymentLink] = useState('');
   const [paypalPaymentLink, setPaypalPaymentLink] = useState('');
@@ -49,7 +48,6 @@ export function SetupRoomWizard({ hasTenant, onComplete }: SetupRoomWizardProps)
       if (!hasTenant) {
         await api.post<OnboardResponse>('/api/tenant/onboard', {
           displayName,
-          telegramBotToken: botToken,
         });
       }
 
@@ -109,36 +107,9 @@ export function SetupRoomWizard({ hasTenant, onComplete }: SetupRoomWizardProps)
         Next
       </button>
     </div>,
-    // Step 1: Bot token
-    <div key="telegram">
-      <h3>Step 2 of {totalSteps}: Telegram Bot Token</h3>
-      <p className="help-text">You need a Telegram bot to manage your paid group. It takes about a minute to create one.</p>
-      <CollapsibleHelp title="How to create a Telegram bot">
-        <ol>
-          <li>Open Telegram and search for <strong>@BotFather</strong></li>
-          <li>Send <code>/newbot</code></li>
-          <li>Choose a name for your bot (e.g. "My Community Bot")</li>
-          <li>Choose a username ending in "bot" (e.g. "mycommunity_bot")</li>
-          <li>Copy the token BotFather gives you</li>
-          <li>Paste it below</li>
-        </ol>
-      </CollapsibleHelp>
-      <div className="form-group">
-        <input
-          type="text"
-          placeholder="Paste your bot token here"
-          value={botToken}
-          onChange={(e) => setBotToken(e.target.value)}
-        />
-      </div>
-      <div style={{ display: 'flex', gap: '0.5rem' }}>
-        <button className="btn-secondary" onClick={() => setStep(0)}>Back</button>
-        <button className="btn-primary" onClick={() => setStep(2)} disabled={!botToken}>Next</button>
-      </div>
-    </div>,
-    // Step 2: Group details
+    // Step 1: Group details
     <div key="room">
-      <h3>{hasTenant ? `Step 1 of ${totalSteps}` : `Step 3 of ${totalSteps}`}: Set up your paid group</h3>
+      <h3>{hasTenant ? `Step 1 of ${totalSteps}` : `Step 2 of ${totalSteps}`}: Set up your paid group</h3>
       <div className="form-group">
         <label>Paid group name:</label>
         <p className="help-text">This is the name subscribers will see when they join.</p>
@@ -192,7 +163,7 @@ export function SetupRoomWizard({ hasTenant, onComplete }: SetupRoomWizardProps)
         </p>
       )}
       <div style={{ display: 'flex', gap: '0.5rem' }}>
-        {!hasTenant && <button className="btn-secondary" onClick={() => setStep(1)}>Back</button>}
+        {!hasTenant && <button className="btn-secondary" onClick={() => setStep(0)}>Back</button>}
         <button className="btn-primary" onClick={handleSubmit} disabled={!roomName || !hasPaymentLink || submitting}>
           {submitting ? 'Creating...' : 'Create Group'}
         </button>
