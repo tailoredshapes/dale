@@ -198,38 +198,7 @@ deploy-prod:
         --cache-control "no-cache, no-store, must-revalidate"
       [ -n "$CF_DIST" ] && aws cloudfront create-invalidation --distribution-id $CF_DIST --paths "/*" || true
     # Build + deploy sub-apps (admin, consumer, creator) with runtime config.js
-    - |
-      OUTPUTS=$(python3 -c "import json; print(json.dumps(json.load(open('cdk-outputs.json')).get('Dale-Prod',{})))")
-      get_out() { python3 -c "import json,sys; d=json.loads(sys.argv[1]); print(d.get(sys.argv[2],''))" "$OUTPUTS" "$1"; }
-      ADMIN_API_URL=$(get_out AdminApiUrl)
-      COGNITO_DOMAIN=dale-prod-890764614009.auth.us-east-1.amazoncognito.com
-      for app in admin consumer creator; do
-        APP_U="${app^}"
-        BUCKET=$(get_out "${APP_U}BucketName")
-        DIST_ID=$(get_out "${APP_U}DistributionId")
-        [ -z "$BUCKET" ] && echo "No bucket for $app, skipping" && continue
-        echo "Building $app..."
-        cd web/$app && npm ci && npm run build && cd ../..
-        # Generate runtime config.js from CDK outputs (not baked at build time)
-        REDIRECT=$([ "$app" = "admin" ] && echo "https://dale-admin.poundit.co.uk/auth" || echo "https://dalegram.com/auth")
-        cat > web/$app/dist/config.js <<EOF
-window.DALE_CONFIG = {
-  apiUrl: '${ADMIN_API_URL}',
-  cognitoDomain: '${COGNITO_DOMAIN}',
-  cognitoClientId: '$COGNITO_CLIENT_ID',
-  redirectUri: '${REDIRECT}',
-};
-EOF
-        aws s3 sync web/$app/dist/ s3://$BUCKET/ --delete \
-          --cache-control "public, max-age=31536000, immutable" \
-          --exclude "index.html" --exclude "config.js"
-        aws s3 cp web/$app/dist/index.html s3://$BUCKET/index.html \
-          --cache-control "no-cache, no-store, must-revalidate"
-        aws s3 cp web/$app/dist/config.js s3://$BUCKET/config.js \
-          --cache-control "no-cache, no-store, must-revalidate"
-        [ -n "$DIST_ID" ] && aws cloudfront create-invalidation --distribution-id $DIST_ID --paths "/*" || true
-        echo "$app deployed to s3://$BUCKET"
-      done
+    - bash scripts/deploy-sub-apps.sh cdk-outputs.json "$COGNITO_CLIENT_ID"
   artifacts:
     paths:
       - cdk-outputs.json
