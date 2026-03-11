@@ -233,6 +233,3 @@ smoke-test-staging:
   script:
     - npm ci
     - npx tsx scripts/smoke-test.ts
-  rules:
-    - if: $CI_COMMIT_BRANCH != "main"
-      when: on_success
