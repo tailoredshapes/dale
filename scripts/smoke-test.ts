@@ -20,8 +20,8 @@ import {
   CognitoIdentityProviderClient,
   AdminCreateUserCommand,
   AdminSetUserPasswordCommand,
-  AdminInitiateAuthCommand,
   AdminDeleteUserCommand,
+  InitiateAuthCommand,
   AuthFlowType,
   MessageActionType,
 } from '@aws-sdk/client-cognito-identity-provider';
@@ -170,11 +170,10 @@ async function checkAuth(cfg: ReturnType<typeof loadConfig>): Promise<string | n
       Permanent: true,
     }));
 
-    // Auth
-    const auth = await client.send(new AdminInitiateAuthCommand({
-      UserPoolId: userPoolId,
+    // Auth — use USER_PASSWORD_AUTH (works in all envs; ADMIN_USER_PASSWORD_AUTH disabled in prod)
+    const auth = await client.send(new InitiateAuthCommand({
       ClientId: userPoolClientId,
-      AuthFlow: AuthFlowType.ADMIN_USER_PASSWORD_AUTH,
+      AuthFlow: AuthFlowType.USER_PASSWORD_AUTH,
       AuthParameters: { USERNAME: username, PASSWORD: password },
     }));
 
