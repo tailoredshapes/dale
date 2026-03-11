@@ -175,6 +175,7 @@ deploy-prod:
         fi
       done
     # Build ARM64 binary for Lambda (cargo lambda cross-compiles correctly)
+    - export PATH="$HOME/.cargo/bin:$PATH"
     - cd backend && cargo lambda build --release --arm64 && cd ..
     # Stage bootstrap where CDK tryBundle picks it up
     - cp backend/target/lambda/dale-backend/bootstrap backend/target/release/dale-backend
@@ -193,6 +194,7 @@ staging-up:
     - gemini-qa
   when: manual
   script:
+    - export PATH="$HOME/.cargo/bin:$PATH"
     - cd backend && cargo lambda build --release --arm64 && cd ..
     # Copy to target/release so CDK local bundling finds it at the expected path
     - cp backend/target/lambda/dale-backend/bootstrap backend/target/release/dale-backend
