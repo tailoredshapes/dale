@@ -11,6 +11,7 @@ variables:
   GIT_CLEAN_FLAGS: -ffdx -e e2e/node_modules -e node_modules
 
 before_script:
+  - source ~/.cargo/env 2>/dev/null || export PATH="$HOME/.cargo/bin:$HOME/.local/bin:$PATH"
   - git config --global url."http://oauth2:${GITLAB_TOKEN}@git.tildarc.com/tailoredshapes".insteadOf "https://git.tildarc.com/tailoredshapes"
 
 test-backend:
@@ -174,7 +175,7 @@ deploy-prod:
         fi
       done
     # Build ARM64 binary for Lambda (cargo lambda cross-compiles correctly)
-    - cd backend && /usr/bin/cargo-lambda build --release --arm64 && cd ..
+    - cd backend && cargo lambda build --release --arm64 && cd ..
     # Stage bootstrap where CDK tryBundle picks it up
     - cp backend/target/lambda/dale-backend/bootstrap backend/target/release/dale-backend
     - npx cdk deploy Dale-Prod -c env=prod --require-approval never --outputs-file cdk-outputs.json
@@ -192,7 +193,7 @@ staging-up:
     - gemini-qa
   when: manual
   script:
-    - cd backend && /usr/bin/cargo-lambda build --release --arm64 && cd ..
+    - cd backend && cargo lambda build --release --arm64 && cd ..
     # Copy to target/release so CDK local bundling finds it at the expected path
     - cp backend/target/lambda/dale-backend/bootstrap backend/target/release/dale-backend
     - docker compose --profile staging up -d --build
