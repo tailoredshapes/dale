@@ -173,7 +173,10 @@ deploy-prod:
           git -C "$TARGET" pull --ff-only || true
         fi
       done
-    - cd backend && cargo build --release && cd ..
+    # Build ARM64 binary for Lambda (cargo lambda cross-compiles correctly)
+    - cd backend && cargo lambda build --release --arm64 && cd ..
+    # Stage bootstrap where CDK tryBundle picks it up
+    - cp backend/target/lambda/dale-backend/bootstrap backend/target/release/dale-backend
     - npx cdk deploy Dale-Prod -c env=prod --require-approval never --outputs-file cdk-outputs.json
   artifacts:
     paths:
