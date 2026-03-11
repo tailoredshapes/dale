@@ -1,5 +1,8 @@
 import { getRooms, Room, getTenantStats, TenantStats } from '../services/api';
 import '../components/room-list-item';
+import '../components/telegram-integration';
+import '../components/stripe-integration';
+import '../components/paypal-integration';
 
 const template = document.createElement('template');
 template.innerHTML = `
@@ -149,6 +152,18 @@ template.innerHTML = `
       background-color: var(--color-accent-hover, #7A8A6E);
     }
 
+    .section-title {
+      font-family: var(--font-serif, Georgia, serif);
+      font-size: 1.5rem;
+      font-weight: 400;
+      color: var(--color-text, #2C2C2C);
+      margin: 0 0 1rem 0;
+    }
+
+    .integrations {
+      margin-top: 3rem;
+    }
+
     @media (max-width: 768px) {
       .stats-grid {
         grid-template-columns: 1fr;
@@ -187,6 +202,13 @@ template.innerHTML = `
         </div>
       </div>
     </div>
+
+    <section class="integrations">
+      <h2 class="section-title">Integrations</h2>
+      <telegram-integration></telegram-integration>
+      <stripe-integration></stripe-integration>
+      <paypal-integration></paypal-integration>
+    </section>
   </section>
 `;
 

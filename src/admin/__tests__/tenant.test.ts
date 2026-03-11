@@ -6,7 +6,7 @@ vi.mock('../../db/tenants.js', () => ({
   updateTenant: vi.fn(),
 }));
 
-import { handleGetTenant, handleUpdateTenant, handleOnboard, handleConfigurePayment } from '../routes/tenant.js';
+import { handleGetTenant, handleUpdateTenant, handleOnboard, handleConfigurePayment, handleConfigureTelegram } from '../routes/tenant.js';
 import { getTenantById, createTenant, updateTenant } from '../../db/tenants.js';
 
 const mockedGetTenant = vi.mocked(getTenantById);
@@ -193,9 +193,44 @@ describe('handleOnboard', () => {
     expect(JSON.parse(result.body).error).toContain('PayPal webhook registration failed');
   });
 
-  it('returns 400 for missing fields', async () => {
-    const result = await handleOnboard('sub-123', JSON.stringify({ displayName: 'Test' }), makeDeps());
+  it('returns 400 for missing displayName', async () => {
+    const result = await handleOnboard('sub-123', JSON.stringify({}), makeDeps());
     expect(result.statusCode).toBe(400);
+    expect(JSON.parse(result.body).error).toBe('Missing required fields');
+  });
+
+  it('creates tenant with displayName only (no integrations)', async () => {
+    const deps = makeDeps();
+    mockedCreateTenant.mockResolvedValue({
+      id: 'meshql-uuid-minimal',
+      display_name: 'Minimal Creator',
+    });
+
+    const result = await handleOnboard('sub-123', JSON.stringify({
+      displayName: 'Minimal Creator',
+    }), deps);
+
+    expect(result.statusCode).toBe(201);
+    const body = JSON.parse(result.body);
+    expect(body.tenantId).toBe('meshql-uuid-minimal');
+    expect(body.webhookRegistered).toBeUndefined();
+    expect(body.stripeWebhookUrl).toBeUndefined();
+    expect(body.paypalWebhookUrl).toBeUndefined();
+
+    // No Telegram webhook should be registered
+    expect(deps.setWebhook).not.toHaveBeenCalled();
+    expect(deps.registerPayPalWebhook).not.toHaveBeenCalled();
+
+    // createTenant should not include telegram_bot_token
+    expect(mockedCreateTenant).toHaveBeenCalledWith({
+      display_name: 'Minimal Creator',
+      telegram_bot_token: undefined,
+      webhook_secret: 'webhook-secret',
+      stripe_secret_key: undefined,
+      stripe_webhook_secret: undefined,
+      paypal_client_id: undefined,
+      paypal_client_secret: undefined,
+    });
   });
 
   it('creates tenant without payment providers', async () => {
@@ -325,5 +360,91 @@ describe('handleConfigurePayment', () => {
   it('returns 400 for invalid JSON', async () => {
     const result = await handleConfigurePayment(AUTH, 'bad', makePaymentDeps());
     expect(result.statusCode).toBe(400);
+  });
+});
+
+function makeTelegramDeps(overrides: Record<string, unknown> = {}) {
+  return {
+    setWebhook: vi.fn().mockResolvedValue(true),
+    telegramWebhookUrl: 'https://tg.example.com',
+    ...overrides,
+  };
+}
+
+describe('handleConfigureTelegram', () => {
+  it('configures Telegram bot token and registers webhook', async () => {
+    const deps = makeTelegramDeps();
+    mockedUpdateTenant.mockResolvedValue({
+      id: 'tenant-1',
+      display_name: 'Test',
+    });
+
+    const result = await handleConfigureTelegram(AUTH, JSON.stringify({
+      telegramBotToken: '123456:ABCdef',
+    }), deps);
+
+    expect(result.statusCode).toBe(200);
+    const body = JSON.parse(result.body);
+    expect(body.webhookRegistered).toBe(true);
+
+    expect(deps.setWebhook).toHaveBeenCalledWith(
+      '123456:ABCdef',
+      'https://tg.example.com',
+      expect.any(String),
+    );
+
+    expect(mockedUpdateTenant).toHaveBeenCalledWith('tenant-1', {
+      telegram_bot_token: '123456:ABCdef',
+    });
+  });
+
+  it('returns 400 when telegramBotToken is missing', async () => {
+    const result = await handleConfigureTelegram(AUTH, JSON.stringify({}), makeTelegramDeps());
+    expect(result.statusCode).toBe(400);
+    expect(JSON.parse(result.body).error).toBe('telegramBotToken is required');
+  });
+
+  it('returns 400 for invalid JSON', async () => {
+    const result = await handleConfigureTelegram(AUTH, 'bad', makeTelegramDeps());
+    expect(result.statusCode).toBe(400);
+  });
+
+  it('returns 502 when webhook registration fails', async () => {
+    const deps = makeTelegramDeps({
+      setWebhook: vi.fn().mockResolvedValue(false),
+    });
+
+    const result = await handleConfigureTelegram(AUTH, JSON.stringify({
+      telegramBotToken: '123456:ABCdef',
+    }), deps);
+
+    expect(result.statusCode).toBe(502);
+    expect(JSON.parse(result.body).error).toContain('webhook registration failed');
+
+    // Token should NOT be persisted if webhook fails
+    expect(mockedUpdateTenant).not.toHaveBeenCalled();
+  });
+
+  it('updates existing Telegram token with new token', async () => {
+    const deps = makeTelegramDeps();
+    mockedUpdateTenant.mockResolvedValue({
+      id: 'tenant-1',
+      display_name: 'Test',
+      telegram_bot_token: '999999:XYZnew',
+    });
+
+    const result = await handleConfigureTelegram(AUTH, JSON.stringify({
+      telegramBotToken: '999999:XYZnew',
+    }), deps);
+
+    expect(result.statusCode).toBe(200);
+    expect(deps.setWebhook).toHaveBeenCalledWith(
+      '999999:XYZnew',
+      'https://tg.example.com',
+      expect.any(String),
+    );
+    expect(mockedUpdateTenant).toHaveBeenCalledWith('tenant-1', {
+      telegram_bot_token: '999999:XYZnew',
+    });
   });
 });

@@ -30,7 +30,7 @@ export interface TenantStats {
 
 export interface OnboardingData {
   displayName: string;
-  telegramBotToken: string;
+  telegramBotToken?: string;
   stripeSecretKey?: string;
   stripeWebhookSecret?: string;
   paypalClientId?: string;
@@ -169,7 +169,6 @@ export async function getRoomSubscribers(roomId: string): Promise<Subscriber[]> 
 export async function getTenantStats(): Promise<TenantStats> {
   const rooms = await getRooms();
   let totalSubscribers = 0;
-  let activeSubscribers = 0;
 
   for (const room of rooms) {
     if (room.subscriberCount) {
@@ -182,4 +181,23 @@ export async function getTenantStats(): Promise<TenantStats> {
     totalSubscribers,
     activeSubscribers: totalSubscribers,
   };
+}
+
+export async function configureTelegram(data: { telegramBotToken: string }): Promise<{ webhookRegistered: boolean }> {
+  return request<{ webhookRegistered: boolean }>('/api/tenant/telegram', {
+    method: 'PUT',
+    body: JSON.stringify(data),
+  });
+}
+
+export async function configurePayment(data: {
+  stripeSecretKey?: string;
+  stripeWebhookSecret?: string;
+  paypalClientId?: string;
+  paypalClientSecret?: string;
+}): Promise<{ stripeWebhookUrl?: string; paypalWebhookUrl?: string }> {
+  return request<{ stripeWebhookUrl?: string; paypalWebhookUrl?: string }>('/api/tenant/payment', {
+    method: 'PUT',
+    body: JSON.stringify(data),
+  });
 }

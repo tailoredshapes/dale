@@ -1,7 +1,7 @@
 import type { APIGatewayProxyEventV2, APIGatewayProxyResultV2 } from 'aws-lambda';
 import { getPlatformConfig } from '../shared/config.js';
 import { extractAuthContext, extractCognitoSub, registerTenantForSub } from './middleware/auth.js';
-import { handleGetTenant, handleUpdateTenant, handleOnboard, handleConfigurePayment } from './routes/tenant.js';
+import { handleGetTenant, handleUpdateTenant, handleOnboard, handleConfigurePayment, handleConfigureTelegram } from './routes/tenant.js';
 import { handleListRooms, handleGetRoom, handleCreateRoom, handleUpdateRoom, handleDeleteRoom } from './routes/rooms.js';
 import { handleListSubscribers } from './routes/subscribers.js';
 import { handleRegisterWebhook } from './routes/webhooks.js';
@@ -85,6 +85,14 @@ export async function handler(
         stripeWebhookUrl: config.stripeWebhookUrl,
         paypalWebhookUrl: config.paypalWebhookUrl,
         paypalBaseUrl: config.paypalBaseUrl,
+      }),
+    );
+  }
+  if (path === '/api/tenant/telegram' && method === 'PUT') {
+    return json(
+      await handleConfigureTelegram(auth, event.body ?? '', {
+        setWebhook,
+        telegramWebhookUrl: config.telegramWebhookUrl,
       }),
     );
   }

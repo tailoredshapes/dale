@@ -1,6 +1,5 @@
 import { getRoom, getRoomSubscribers, updateRoom, Room, Subscriber } from '../services/api';
 import { showSuccess, showError } from '../services/toast';
-import { navigate } from '../services/router';
 import '../components/subscriber-list';
 import '../components/room-form';
 

@@ -55,7 +55,7 @@ export async function handleOnboard(
 ): Promise<{ statusCode: number; body: string }> {
   let parsed: {
     displayName: string;
-    telegramBotToken: string;
+    telegramBotToken?: string;
     stripeSecretKey?: string;
     stripeWebhookSecret?: string;
     paypalClientId?: string;
@@ -67,10 +67,11 @@ export async function handleOnboard(
     return { statusCode: 400, body: JSON.stringify({ error: 'Invalid JSON' }) };
   }
 
-  if (!parsed.displayName || !parsed.telegramBotToken) {
+  if (!parsed.displayName) {
     return { statusCode: 400, body: JSON.stringify({ error: 'Missing required fields' }) };
   }
 
+  const hasTelegram = !!parsed.telegramBotToken;
   const hasStripe = !!(parsed.stripeSecretKey && parsed.stripeWebhookSecret);
   const hasPayPal = !!(parsed.paypalClientId && parsed.paypalClientSecret);
 
@@ -79,7 +80,7 @@ export async function handleOnboard(
   // Create tenant first to get the meshql-rs generated ID
   const createdTenant = await createTenant({
     display_name: parsed.displayName,
-    telegram_bot_token: parsed.telegramBotToken,
+    telegram_bot_token: hasTelegram ? parsed.telegramBotToken : undefined,
     webhook_secret: webhookSecret,
     stripe_secret_key: hasStripe ? parsed.stripeSecretKey : undefined,
     stripe_webhook_secret: hasStripe ? parsed.stripeWebhookSecret : undefined,
@@ -107,18 +108,23 @@ export async function handleOnboard(
     }
   }
 
-  // Register Telegram webhook
-  const webhookRegistered = await deps.setWebhook(
-    parsed.telegramBotToken,
-    deps.telegramWebhookUrl,
-    webhookSecret,
-  );
+  // Register Telegram webhook only if token provided
+  let webhookRegistered = false;
+  if (hasTelegram) {
+    webhookRegistered = await deps.setWebhook(
+      parsed.telegramBotToken!,
+      deps.telegramWebhookUrl,
+      webhookSecret,
+    );
+  }
 
   const response: Record<string, unknown> = {
     tenantId,
     webhookSecret,
-    webhookRegistered,
   };
+  if (hasTelegram) {
+    response.webhookRegistered = webhookRegistered;
+  }
   if (hasStripe) {
     response.stripeWebhookUrl = `${deps.stripeWebhookUrl}?tenant=${tenantId}`;
     response.stripeWebhookSecret = parsed.stripeWebhookSecret;
@@ -130,6 +136,49 @@ export async function handleOnboard(
   return {
     statusCode: 201,
     body: JSON.stringify(response),
+  };
+}
+
+export async function handleConfigureTelegram(
+  auth: AuthContext,
+  body: string,
+  deps: {
+    setWebhook: (botToken: string, webhookUrl: string, secretToken: string) => Promise<boolean>;
+    telegramWebhookUrl: string;
+  },
+): Promise<{ statusCode: number; body: string }> {
+  let parsed: { telegramBotToken?: string };
+  try {
+    parsed = JSON.parse(body);
+  } catch {
+    return { statusCode: 400, body: JSON.stringify({ error: 'Invalid JSON' }) };
+  }
+
+  if (!parsed.telegramBotToken) {
+    return { statusCode: 400, body: JSON.stringify({ error: 'telegramBotToken is required' }) };
+  }
+
+  // Generate a new webhook secret for this token
+  const tenant = await getTenantById(auth.tenantId);
+  const webhookSecret = tenant?.webhook_secret ?? '';
+
+  // Register webhook first - if it fails, don't persist the token
+  const webhookRegistered = await deps.setWebhook(
+    parsed.telegramBotToken,
+    deps.telegramWebhookUrl,
+    webhookSecret,
+  );
+
+  if (!webhookRegistered) {
+    return { statusCode: 502, body: JSON.stringify({ error: 'Telegram webhook registration failed' }) };
+  }
+
+  // Webhook succeeded - persist the token
+  await updateTenant(auth.tenantId, { telegram_bot_token: parsed.telegramBotToken });
+
+  return {
+    statusCode: 200,
+    body: JSON.stringify({ webhookRegistered: true }),
   };
 }
 
