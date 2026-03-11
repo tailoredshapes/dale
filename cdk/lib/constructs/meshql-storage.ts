@@ -24,15 +24,20 @@ export class MeshqlStorage extends Construct {
   constructor(scope: Construct, id: string, props: MeshqlStorageProps) {
     super(scope, id);
 
-    // VPC for EFS and Lambda — private subnets, no NAT Gateway.
+    // VPC for EFS and Lambda — no NAT Gateway.
     // MeshQL (restlette/graphlette) is a pure data store: no outbound internet calls.
-    // EFS mounts work entirely within the VPC. NAT = wasted $32/month.
-    // Keep subnet name 'Private' (same logical ID) to avoid CIDR conflicts on update.
-    // Remove Public subnets + NAT — CloudFormation deletes them cleanly.
+    // EFS mounts are VPC-internal. Keep both subnet tiers to preserve CIDR allocations
+    // (removing Public subnets causes CDK to reallocate CIDRs, creating conflicts).
+    // natGateways:0 = CloudFormation removes NAT routes from Private route tables in-place.
     this.vpc = new ec2.Vpc(this, 'MeshqlVpc', {
       maxAzs: 2,
       natGateways: 0,
       subnetConfiguration: [
+        {
+          name: 'Public',
+          subnetType: ec2.SubnetType.PUBLIC,
+          cidrMask: 24,
+        },
         {
           name: 'Private',
           subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
