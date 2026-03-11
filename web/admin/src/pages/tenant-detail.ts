@@ -1,6 +1,5 @@
 import { getTenant, suspendTenant, unsuspendTenant, TenantDetails } from '../services/api';
 import { showSuccess, showError } from '../services/toast';
-import { navigate } from '../services/router';
 
 const template = document.createElement('template');
 template.innerHTML = `
