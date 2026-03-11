@@ -24,19 +24,16 @@ export class MeshqlStorage extends Construct {
   constructor(scope: Construct, id: string, props: MeshqlStorageProps) {
     super(scope, id);
 
-    // VPC for EFS and Lambda
+    // VPC for EFS and Lambda — isolated subnets only, no NAT Gateway.
+    // MeshQL (restlette/graphlette) is a pure data store: no outbound internet calls.
+    // EFS mounts work entirely within the VPC. NAT = wasted $32/month.
     this.vpc = new ec2.Vpc(this, 'MeshqlVpc', {
       maxAzs: 2,
-      natGateways: 1,
+      natGateways: 0,
       subnetConfiguration: [
         {
-          name: 'Public',
-          subnetType: ec2.SubnetType.PUBLIC,
-          cidrMask: 24,
-        },
-        {
-          name: 'Private',
-          subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
+          name: 'Isolated',
+          subnetType: ec2.SubnetType.PRIVATE_ISOLATED,
           cidrMask: 24,
         },
       ],
@@ -97,7 +94,7 @@ export class MeshqlStorage extends Construct {
         RUST_LOG: 'info',
       },
       vpc: this.vpc,
-      vpcSubnets: { subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS },
+      vpcSubnets: { subnetType: ec2.SubnetType.PRIVATE_ISOLATED },
       filesystem: lambda.FileSystem.fromEfsAccessPoint(this.accessPoint, '/mnt/meshql'),
       timeout: cdk.Duration.seconds(30),
       memorySize: 512,
