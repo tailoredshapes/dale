@@ -190,6 +190,7 @@ deploy-prod:
       VITE_COGNITO_DOMAIN=dale-prod-890764614009.auth.us-east-1.amazoncognito.com \
       VITE_REDIRECT_SIGN_IN=https://dalegram.com/callback \
       VITE_REDIRECT_SIGN_OUT=https://dalegram.com/ \
+      VITE_API_URL=$VITE_API_URL \
       npm run build
       cd ..
       aws s3 sync web/dist/ s3://$WEB_BUCKET/ --delete \
