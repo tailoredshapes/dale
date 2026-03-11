@@ -153,6 +153,8 @@ deploy-prod:
     AWS_ACCESS_KEY_ID: $AWS_ACCESS_KEY_ID
     AWS_SECRET_ACCESS_KEY: $AWS_SECRET_ACCESS_KEY
     AWS_DEFAULT_REGION: $AWS_DEFAULT_REGION
+    GOOGLE_CLIENT_ID: $GOOGLE_CLIENT_ID
+    GOOGLE_CLIENT_SECRET: $GOOGLE_CLIENT_SECRET
   script:
     - npm ci
     # Clone meshql-rs deps and build backend binary for Lambda deployment
