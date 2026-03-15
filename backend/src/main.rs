@@ -1,10 +1,7 @@
 use axum::Router;
-use merkql::broker::{Broker, BrokerConfig};
-use merksql::MerkSql;
-use meshql_core::{GraphletteConfig, RestletteConfig, RootConfig, ServerConfig};
-use meshql_merksql::{MerksqlRepository, MerksqlSearcher};
-use std::path::PathBuf;
-use std::sync::{Arc, Mutex};
+use meshql_core::{GraphletteConfig, NoAuth, RestletteConfig, RootConfig, ServerConfig};
+use meshql_mongo::{MongoRepository, MongoSearcher};
+use std::sync::Arc;
 
 // --- GraphQL schemas (3) ---
 const TENANT_GRAPHQL: &str = include_str!("../config/graph/tenant.graphql");
@@ -18,37 +15,45 @@ const USER_ROOM_JSON: &str = include_str!("../config/json/user_room.schema.json"
 
 #[tokio::main]
 async fn main() -> Result<(), lambda_http::Error> {
-    let efs_path = std::env::var("EFS_MOUNT_PATH").unwrap_or_else(|_| "/mnt/efs".to_string());
+    let mongodb_uri = std::env::var("MONGODB_URI")
+        .unwrap_or_else(|_| "mongodb://localhost:27017/dale".to_string());
+    let db_name = "dale";
 
-    let broker = Broker::open(BrokerConfig::new(PathBuf::from(&efs_path)))
-        .map_err(|e| lambda_http::Error::from(format!("broker open failed: {e}")))?;
-
-    let merksql = Arc::new(Mutex::new(MerkSql::new(broker.clone())));
+    let auth: Arc<dyn meshql_core::Auth> = Arc::new(NoAuth);
 
     // ===== REPOSITORIES (3) =====
-    let tenant_repo = Arc::new(MerksqlRepository::new(
-        broker.clone(),
-        "tenant",
-        merksql.clone(),
-    ));
-    let room_repo = Arc::new(MerksqlRepository::new(
-        broker.clone(),
-        "room",
-        merksql.clone(),
-    ));
-    let user_room_repo = Arc::new(MerksqlRepository::new(
-        broker.clone(),
-        "user_room",
-        merksql.clone(),
-    ));
+    let tenant_repo = Arc::new(
+        MongoRepository::new(&mongodb_uri, db_name, "tenant", auth.clone())
+            .await
+            .map_err(|e| lambda_http::Error::from(format!("tenant repo failed: {e}")))?,
+    );
+    let room_repo = Arc::new(
+        MongoRepository::new(&mongodb_uri, db_name, "room", auth.clone())
+            .await
+            .map_err(|e| lambda_http::Error::from(format!("room repo failed: {e}")))?,
+    );
+    let user_room_repo = Arc::new(
+        MongoRepository::new(&mongodb_uri, db_name, "user_room", auth.clone())
+            .await
+            .map_err(|e| lambda_http::Error::from(format!("user_room repo failed: {e}")))?,
+    );
 
     // ===== SEARCHERS (3) =====
-    let tenant_searcher: Arc<dyn meshql_core::Searcher> =
-        Arc::new(MerksqlSearcher::new(broker.clone(), "tenant", merksql.clone()));
-    let room_searcher: Arc<dyn meshql_core::Searcher> =
-        Arc::new(MerksqlSearcher::new(broker.clone(), "room", merksql.clone()));
-    let user_room_searcher: Arc<dyn meshql_core::Searcher> =
-        Arc::new(MerksqlSearcher::new(broker.clone(), "user_room", merksql.clone()));
+    let tenant_searcher: Arc<dyn meshql_core::Searcher> = Arc::new(
+        MongoSearcher::new(&mongodb_uri, db_name, "tenant", auth.clone())
+            .await
+            .map_err(|e| lambda_http::Error::from(format!("tenant searcher failed: {e}")))?,
+    );
+    let room_searcher: Arc<dyn meshql_core::Searcher> = Arc::new(
+        MongoSearcher::new(&mongodb_uri, db_name, "room", auth.clone())
+            .await
+            .map_err(|e| lambda_http::Error::from(format!("room searcher failed: {e}")))?,
+    );
+    let user_room_searcher: Arc<dyn meshql_core::Searcher> = Arc::new(
+        MongoSearcher::new(&mongodb_uri, db_name, "user_room", auth.clone())
+            .await
+            .map_err(|e| lambda_http::Error::from(format!("user_room searcher failed: {e}")))?,
+    );
 
     // ===== ROOT CONFIGS (3) =====
 

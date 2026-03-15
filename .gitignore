@@ -12,3 +12,8 @@ cdk.out/
 cdk-outputs.json
 e2e/node_modules/
 e2e/reports/
+backend/target/
+.terraform/
+*.tfstate
+*.tfstate.backup
+.terraform.lock.hcl

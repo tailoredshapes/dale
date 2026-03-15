@@ -34,19 +34,6 @@ test-web:
     paths:
       - web/node_modules/
 
-synth:
-  stage: test
-  script:
-    - npm ci
-    # Stub backend binary so CDK local bundling succeeds during synth (real build happens in e2e/deploy)
-    - mkdir -p backend/target/release && printf '#!/bin/sh\necho stub' > backend/target/release/dale-backend && chmod +x backend/target/release/dale-backend
-    - cd cdk && npm ci && cd ..
-    - npx cdk synth -c env=dev
-  cache:
-    key: dale-node-${CI_COMMIT_REF_SLUG}
-    paths:
-      - node_modules/
-
 e2e-local:
   stage: e2e
   tags:
@@ -70,10 +57,10 @@ e2e-local:
     - docker compose -p dale-work -f docker-compose.yml down -v 2>/dev/null || true
     - docker ps -q --filter "name=dale-work" | xargs -r docker rm -f || true
   script:
-    # Clone meshql-rs dependencies (backend has local path deps)
+    # Clone meshql-rs dependency (backend has local path deps)
     - |
       PARENT=$(dirname $(pwd))
-      for repo in meshql-rs merkql merksql; do
+      for repo in meshql-rs; do
         TARGET="$PARENT/$repo"
         if [ -d "$TARGET" ] && ! git -C "$TARGET" rev-parse --git-dir > /dev/null 2>&1; then
           echo "Removing corrupt/incomplete $repo directory"
@@ -159,10 +146,10 @@ deploy-prod:
     GOOGLE_CLIENT_SECRET: $GOOGLE_CLIENT_SECRET
   script:
     - npm ci
-    # Clone meshql-rs deps and build backend binary for Lambda deployment
+    # Clone meshql-rs and build Rust backend for Lambda
     - |
       PARENT=$(dirname $(pwd))
-      for repo in meshql-rs merkql merksql; do
+      for repo in meshql-rs; do
         TARGET="$PARENT/$repo"
         if [ -d "$TARGET" ] && ! git -C "$TARGET" rev-parse --git-dir > /dev/null 2>&1; then
           echo "Removing corrupt/incomplete $repo directory"
@@ -174,23 +161,36 @@ deploy-prod:
           git -C "$TARGET" pull --ff-only || true
         fi
       done
-    # Build ARM64 binary for Lambda (cargo lambda cross-compiles correctly)
     - export PATH="$HOME/.cargo/bin:$PATH"
     - cd backend && cargo lambda build --release --arm64 && cd ..
-    # Stage bootstrap where CDK tryBundle picks it up
-    - cp backend/target/lambda/dale-backend/bootstrap backend/target/release/dale-backend
-    - npx cdk deploy Dale-Prod -c env=prod --require-approval never --outputs-file cdk-outputs.json
-    # Build + deploy SPA with prod URLs baked in
+
+    # Bundle Node.js Lambdas
+    - bash scripts/bundle-lambdas.sh
+
+    # Terraform deploy + web SPA build/deploy
     - |
-      WEB_BUCKET=$(python3 -c "import json; d=json.load(open('cdk-outputs.json')); print(d.get('Dale-Prod',{}).get('WebBucketName',''))")
-      CF_DIST=$(python3 -c "import json; d=json.load(open('cdk-outputs.json')); print(d.get('Dale-Prod',{}).get('DistributionId',''))")
+      cd terraform
+      terraform init
+      terraform apply -auto-approve \
+        -var="atlas_client_id=$ATLAS_CLIENT_ID" \
+        -var="atlas_client_secret=$ATLAS_CLIENT_SECRET" \
+        -var="cloudflare_api_token=$CLOUDFLARE_API_TOKEN" \
+        -var="google_client_id=$GOOGLE_CLIENT_ID" \
+        -var="google_client_secret=$GOOGLE_CLIENT_SECRET" \
+        -var="cognito_user_pool_id=$COGNITO_USER_POOL_ID" \
+        -var="cognito_client_id=$COGNITO_CLIENT_ID"
+      WEB_BUCKET=$(terraform output -raw web_bucket_name)
+      CF_DIST=$(terraform output -raw web_distribution_id)
+      cd ..
+
+      # Build + deploy main web SPA
       cd web && npm ci
       VITE_USER_POOL_ID=$COGNITO_USER_POOL_ID \
       VITE_USER_POOL_CLIENT_ID=$COGNITO_CLIENT_ID \
       VITE_COGNITO_DOMAIN=dale-prod-890764614009.auth.us-east-1.amazoncognito.com \
       VITE_REDIRECT_SIGN_IN=https://dalegram.com/callback \
       VITE_REDIRECT_SIGN_OUT=https://dalegram.com/ \
-      VITE_API_URL=$VITE_API_URL \
+      VITE_API_URL=https://api.dalegram.com \
       npm run build
       cd ..
       aws s3 sync web/dist/ s3://$WEB_BUCKET/ --delete \
@@ -198,12 +198,9 @@ deploy-prod:
       aws s3 cp web/dist/index.html s3://$WEB_BUCKET/index.html \
         --cache-control "no-cache, no-store, must-revalidate"
       [ -n "$CF_DIST" ] && aws cloudfront create-invalidation --distribution-id $CF_DIST --paths "/*" || true
+
     # Build + deploy sub-apps (admin, consumer, creator) with runtime config.js
-    - bash scripts/deploy-sub-apps.sh cdk-outputs.json "$COGNITO_CLIENT_ID"
-  artifacts:
-    paths:
-      - cdk-outputs.json
-    expire_in: 1 hour
+    - bash scripts/deploy-sub-apps.sh "$COGNITO_CLIENT_ID"
 
 # ── Staging (on-demand, manual) ───────────────────────
 
@@ -216,7 +213,6 @@ staging-up:
   script:
     - export PATH="$HOME/.cargo/bin:$PATH"
     - cd backend && cargo lambda build --release --arm64 && cd ..
-    # Copy to target/release so CDK local bundling finds it at the expected path
     - cp backend/target/lambda/dale-backend/bootstrap backend/target/release/dale-backend
     - docker compose --profile staging up -d --build
     - echo "Staging is live at https://dale.poundit.co.uk"
@@ -234,16 +230,30 @@ staging-down:
 
 smoke-test-prod:
   stage: smoke-test
+  tags: [shell]
   needs:
     - deploy-prod
   variables:
     AWS_ACCESS_KEY_ID: $AWS_ACCESS_KEY_ID
     AWS_SECRET_ACCESS_KEY: $AWS_SECRET_ACCESS_KEY
     AWS_DEFAULT_REGION: $AWS_DEFAULT_REGION
-    STACK: Dale-Prod
+    COGNITO_USER_POOL_ID: $COGNITO_USER_POOL_ID
+    COGNITO_CLIENT_ID: $COGNITO_CLIENT_ID
   script:
     - npm ci
-    - npx tsx scripts/smoke-test.ts
+    # Read Terraform outputs for smoke test
+    - |
+      cd terraform
+      terraform init -input=false
+      export E2E_ADMIN_API_URL=https://api.dalegram.com
+      export E2E_TELEGRAM_WEBHOOK_URL=$(terraform output -raw telegram_webhook_url)
+      export E2E_STRIPE_WEBHOOK_URL=$(terraform output -raw stripe_webhook_url)
+      export E2E_PAYPAL_WEBHOOK_URL=$(terraform output -raw paypal_webhook_url)
+      export E2E_WEB_DISTRIBUTION_URL=https://dalegram.com
+      export E2E_USER_POOL_ID=$COGNITO_USER_POOL_ID
+      export E2E_USER_POOL_CLIENT_ID=$COGNITO_CLIENT_ID
+      cd ..
+      npx tsx scripts/smoke-test.ts
   only:
     - main
 

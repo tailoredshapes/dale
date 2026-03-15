@@ -3,19 +3,14 @@
  * Dale Smoke Test
  *
  * Verifies that all live integrations are reachable and behaving correctly.
- * Reads endpoint config from cdk-outputs.json (auto-detect stack) or env vars.
+ * Reads endpoint config from environment variables (set by CI from Terraform outputs).
  *
  * Usage:
- *   npx tsx scripts/smoke-test.ts                    # uses cdk-outputs.json (Dev stack)
- *   STACK=Dale-Prod npx tsx scripts/smoke-test.ts    # override stack key
- *   E2E_ADMIN_API_URL=https://... npx tsx scripts/smoke-test.ts  # fully manual
+ *   E2E_ADMIN_API_URL=https://api.dalegram.com npx tsx scripts/smoke-test.ts
  *
  * Exit code 0 = all checks passed. Non-zero = at least one failure.
  */
 
-import { readFileSync } from 'fs';
-import { resolve, dirname } from 'path';
-import { fileURLToPath } from 'url';
 import {
   CognitoIdentityProviderClient,
   AdminCreateUserCommand,
@@ -28,34 +23,19 @@ import {
 
 // ─── Config ─────────────────────────────────────────────────────────────────
 
-const __dir = dirname(fileURLToPath(import.meta.url));
-
-function loadCdkOutputs(): Record<string, string> {
-  try {
-    const raw = readFileSync(resolve(__dir, '../cdk-outputs.json'), 'utf-8');
-    const all = JSON.parse(raw);
-    const stackKey = process.env.STACK ?? Object.keys(all)[0];
-    console.log(`  📦 Using CDK stack: ${stackKey}`);
-    return all[stackKey] ?? {};
-  } catch {
-    return {};
-  }
-}
-
 function loadConfig() {
-  const cdk = loadCdkOutputs();
-  const get = (env: string, key: string, fallback = '') =>
-    process.env[env] ?? cdk[key] ?? fallback;
+  const get = (env: string, fallback = '') =>
+    process.env[env] ?? fallback;
 
   return {
-    adminApiUrl:        get('E2E_ADMIN_API_URL',         'AdminApiUrl'),
-    telegramWebhookUrl: get('E2E_TELEGRAM_WEBHOOK_URL',  'TelegramWebhookUrl'),
-    stripeWebhookUrl:   get('E2E_STRIPE_WEBHOOK_URL',    'StripeWebhookUrl'),
-    paypalWebhookUrl:   get('E2E_PAYPAL_WEBHOOK_URL',    'PayPalWebhookUrl'),
-    webDistributionUrl: get('E2E_WEB_DISTRIBUTION_URL',  'WebDistributionUrl'),
-    cloudFrontDomain:   get('E2E_CLOUDFRONT_DOMAIN',     'CloudFrontDomain'),
-    userPoolId:         get('E2E_USER_POOL_ID',          'UserPoolId'),
-    userPoolClientId:   get('E2E_USER_POOL_CLIENT_ID',   'UserPoolClientId'),
+    adminApiUrl:        get('E2E_ADMIN_API_URL'),
+    telegramWebhookUrl: get('E2E_TELEGRAM_WEBHOOK_URL'),
+    stripeWebhookUrl:   get('E2E_STRIPE_WEBHOOK_URL'),
+    paypalWebhookUrl:   get('E2E_PAYPAL_WEBHOOK_URL'),
+    webDistributionUrl: get('E2E_WEB_DISTRIBUTION_URL'),
+    cloudFrontDomain:   get('E2E_CLOUDFRONT_DOMAIN'),
+    userPoolId:         get('E2E_USER_POOL_ID'),
+    userPoolClientId:   get('E2E_USER_POOL_CLIENT_ID'),
     region:             process.env.AWS_REGION ?? 'us-east-1',
   };
 }

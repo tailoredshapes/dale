@@ -5,15 +5,12 @@ edition = "2021"
 
 [dependencies]
 meshql-core = { path = "../../meshql-rs/meshql-core" }
-meshql-merksql = { path = "../../meshql-rs/meshql-merksql" }
+meshql-mongo = { path = "../../meshql-rs/meshql-mongo" }
 meshql-graphlette = { path = "../../meshql-rs/meshql-graphlette" }
 meshql-restlette = { path = "../../meshql-rs/meshql-restlette" }
 meshql-server = { path = "../../meshql-rs/meshql-server" }
 meshql-lambda = { path = "../../meshql-rs/meshql-lambda" }
-merkql = { path = "../../merkql", features = ["notify"] }
-merkql-notify = { path = "../../merkql/merkql-notify" }
-merkql-notify-sns = { path = "../../merkql/merkql-notify-sns" }
-merksql = { path = "../../merksql" }
+mongodb = "3"
 lambda_http = "0.13"
 tokio = { version = "1", features = ["full"] }
 serde_json = "1"
@@ -25,4 +22,3 @@ http = "1"
 reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "json"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
-aws-config = { version = "1", features = ["behavior-version-latest"] }
