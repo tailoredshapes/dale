@@ -5,11 +5,9 @@ services:
       context: ./backend
       dockerfile: Dockerfile
     environment:
-    - EFS_MOUNT_PATH=/data
+    - MONGODB_URI=${MONGODB_URI:-mongodb://localhost:27017/dale}
     - RUN_MODE=server
     - RUST_LOG=info
-    volumes:
-    - meshql-data:/data
     healthcheck:
       test:
       - CMD-SHELL
@@ -61,5 +59,3 @@ services:
         condition: service_healthy
     profiles:
     - staging
-volumes:
-  meshql-data: null

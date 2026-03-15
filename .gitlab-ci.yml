@@ -52,6 +52,7 @@ e2e-local:
       when: always
   variables:
     COMPOSE_PROJECT_NAME: dale-${CI_JOB_ID}
+    MONGODB_URI: $MONGODB_URI
   before_script:
     # Kill any leftover dale-work containers from local dev/agent runs that may hold ports
     - docker compose -p dale-work -f docker-compose.yml down -v 2>/dev/null || true
