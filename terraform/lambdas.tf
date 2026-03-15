@@ -288,7 +288,7 @@ resource "aws_lambda_function" "paypal" {
 
   environment {
     variables = {
-      MESHQL_URL     = aws_lambda_function_url.backend.function_url
+      MESHQL_URL     = aws_apigatewayv2_api.backend.api_endpoint
       PAYPAL_BASE_URL = "https://api-m.paypal.com"
     }
   }
@@ -320,7 +320,7 @@ resource "aws_lambda_function" "admin" {
 
   environment {
     variables = {
-      MESHQL_URL           = aws_lambda_function_url.backend.function_url
+      MESHQL_URL           = aws_apigatewayv2_api.backend.api_endpoint
       TELEGRAM_WEBHOOK_URL = aws_lambda_function_url.telegram.function_url
       STRIPE_WEBHOOK_URL   = aws_lambda_function_url.stripe.function_url
       PAYPAL_WEBHOOK_URL   = aws_lambda_function_url.paypal.function_url
