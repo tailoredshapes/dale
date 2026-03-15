@@ -199,7 +199,7 @@ resource "aws_lambda_function" "backend" {
 
   environment {
     variables = {
-      MONGODB_SECRET_ARN = aws_secretsmanager_secret.mongodb_uri.arn
+      MONGODB_URI = local.mongodb_uri
     }
   }
 
