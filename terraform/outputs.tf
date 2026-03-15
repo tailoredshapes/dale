@@ -78,6 +78,6 @@ output "cognito_user_pool_id" {
 }
 
 output "cognito_client_id" {
-  description = "Cognito User Pool Client ID (pass-through)"
-  value       = var.cognito_client_id
+  description = "Cognito User Pool Client ID"
+  value       = aws_cognito_user_pool_client.web.id
 }

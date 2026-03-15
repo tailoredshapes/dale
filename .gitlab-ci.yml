@@ -178,16 +178,16 @@ deploy-prod:
         -var="cloudflare_api_token=$CLOUDFLARE_API_TOKEN" \
         -var="google_client_id=$GOOGLE_CLIENT_ID" \
         -var="google_client_secret=$GOOGLE_CLIENT_SECRET" \
-        -var="cognito_user_pool_id=$COGNITO_USER_POOL_ID" \
-        -var="cognito_client_id=$COGNITO_CLIENT_ID"
+        -var="cognito_user_pool_id=$COGNITO_USER_POOL_ID"
       WEB_BUCKET=$(terraform output -raw web_bucket_name)
       CF_DIST=$(terraform output -raw web_distribution_id)
+      TF_CLIENT_ID=$(terraform output -raw cognito_client_id)
       cd ..
 
       # Build + deploy main web SPA
       cd web && npm ci
       VITE_USER_POOL_ID=$COGNITO_USER_POOL_ID \
-      VITE_USER_POOL_CLIENT_ID=$COGNITO_CLIENT_ID \
+      VITE_USER_POOL_CLIENT_ID=$TF_CLIENT_ID \
       VITE_COGNITO_DOMAIN=dale-prod-890764614009.auth.us-east-1.amazoncognito.com \
       VITE_REDIRECT_SIGN_IN=https://dalegram.com/callback \
       VITE_REDIRECT_SIGN_OUT=https://dalegram.com/ \
@@ -200,8 +200,8 @@ deploy-prod:
         --cache-control "no-cache, no-store, must-revalidate"
       [ -n "$CF_DIST" ] && aws cloudfront create-invalidation --distribution-id $CF_DIST --paths "/*" || true
 
-    # Build + deploy sub-apps (admin, consumer, creator) with runtime config.js
-    - bash scripts/deploy-sub-apps.sh "$COGNITO_CLIENT_ID"
+      # Build + deploy sub-apps (admin, consumer, creator) with runtime config.js
+      bash scripts/deploy-sub-apps.sh "$TF_CLIENT_ID"
 
 # ── Staging (on-demand, manual) ───────────────────────
 
@@ -239,7 +239,6 @@ smoke-test-prod:
     AWS_SECRET_ACCESS_KEY: $AWS_SECRET_ACCESS_KEY
     AWS_DEFAULT_REGION: $AWS_DEFAULT_REGION
     COGNITO_USER_POOL_ID: $COGNITO_USER_POOL_ID
-    COGNITO_CLIENT_ID: $COGNITO_CLIENT_ID
   script:
     - npm ci
     # Read Terraform outputs for smoke test
@@ -252,7 +251,7 @@ smoke-test-prod:
       export E2E_PAYPAL_WEBHOOK_URL=$(terraform output -raw paypal_webhook_url)
       export E2E_WEB_DISTRIBUTION_URL=https://dalegram.com
       export E2E_USER_POOL_ID=$COGNITO_USER_POOL_ID
-      export E2E_USER_POOL_CLIENT_ID=$COGNITO_CLIENT_ID
+      export E2E_USER_POOL_CLIENT_ID=$(terraform output -raw cognito_client_id)
       cd ..
       npx tsx scripts/smoke-test.ts
   only:

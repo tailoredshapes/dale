@@ -235,6 +235,13 @@ resource "aws_cloudfront_distribution" "web" {
 
   # SPA fallback: 404 → index.html
   custom_error_response {
+    error_code            = 403
+    response_code         = 200
+    response_page_path    = "/index.html"
+    error_caching_min_ttl = 10
+  }
+
+  custom_error_response {
     error_code            = 404
     response_code         = 200
     response_page_path    = "/index.html"
@@ -284,6 +291,13 @@ resource "aws_cloudfront_distribution" "consumer" {
     min_ttl     = 0
     default_ttl = 3600
     max_ttl     = 86400
+  }
+
+  custom_error_response {
+    error_code            = 403
+    response_code         = 200
+    response_page_path    = "/index.html"
+    error_caching_min_ttl = 10
   }
 
   custom_error_response {
@@ -337,6 +351,13 @@ resource "aws_cloudfront_distribution" "creator" {
   }
 
   custom_error_response {
+    error_code            = 403
+    response_code         = 200
+    response_page_path    = "/index.html"
+    error_caching_min_ttl = 10
+  }
+
+  custom_error_response {
     error_code            = 404
     response_code         = 200
     response_page_path    = "/index.html"
@@ -384,6 +405,13 @@ resource "aws_cloudfront_distribution" "admin" {
     min_ttl     = 0
     default_ttl = 3600
     max_ttl     = 86400
+  }
+
+  custom_error_response {
+    error_code            = 403
+    response_code         = 200
+    response_page_path    = "/index.html"
+    error_caching_min_ttl = 10
   }
 
   custom_error_response {

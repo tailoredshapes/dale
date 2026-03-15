@@ -21,12 +21,6 @@ variable "cognito_user_pool_id" {
   default     = "us-east-1_a7plDpMno"
 }
 
-variable "cognito_client_id" {
-  description = "Existing Cognito User Pool Client ID"
-  type        = string
-  default     = "4l5l3o8hro5autenfr8ss1mn3a"
-}
-
 variable "atlas_project_id" {
   description = "MongoDB Atlas project ID"
   type        = string
