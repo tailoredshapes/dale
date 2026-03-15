@@ -37,8 +37,17 @@ for spec in "${LAMBDAS[@]}"; do
   # Create package.json with ESM type
   echo '{"type":"module"}' > "dist/$name/package.json"
 
-  # Create zip
-  (cd "dist/$name" && zip -r "../$name/$name.zip" .)
+  # Create zip (use python3 zipfile — avoids needing zip binary on shell runners)
+  python3 -c "
+import zipfile, os, sys
+src = sys.argv[1]
+dst = sys.argv[2]
+with zipfile.ZipFile(dst, 'w', zipfile.ZIP_DEFLATED) as zf:
+    for root, dirs, files in os.walk(src):
+        for f in files:
+            full = os.path.join(root, f)
+            zf.write(full, os.path.relpath(full, src))
+" "dist/$name" "dist/$name/$name.zip"
   echo "  -> dist/$name/$name.zip"
 done
 
