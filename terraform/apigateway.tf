@@ -115,3 +115,45 @@ resource "aws_apigatewayv2_api_mapping" "api" {
   domain_name = aws_apigatewayv2_domain_name.api.id
   stage       = aws_apigatewayv2_stage.default.id
 }
+
+# -----------------------------------------------------------------------------
+# HTTP API (API Gateway v2) — Backend (meshql-rs, no auth, internal use only)
+# -----------------------------------------------------------------------------
+
+resource "aws_apigatewayv2_api" "backend" {
+  name          = "DaleBackendApi"
+  protocol_type = "HTTP"
+
+  tags = local.common_tags
+}
+
+resource "aws_apigatewayv2_integration" "backend" {
+  api_id                 = aws_apigatewayv2_api.backend.id
+  integration_type       = "AWS_PROXY"
+  integration_uri        = aws_lambda_function.backend.invoke_arn
+  integration_method     = "POST"
+  payload_format_version = "2.0"
+}
+
+resource "aws_apigatewayv2_route" "backend_any" {
+  api_id    = aws_apigatewayv2_api.backend.id
+  route_key = "ANY /{proxy+}"
+  target    = "integrations/${aws_apigatewayv2_integration.backend.id}"
+}
+
+resource "aws_apigatewayv2_stage" "backend_default" {
+  api_id      = aws_apigatewayv2_api.backend.id
+  name        = "$default"
+  auto_deploy = true
+
+  tags = local.common_tags
+}
+
+# Lambda permission for API Gateway to invoke backend Lambda
+resource "aws_lambda_permission" "backend_api_gateway" {
+  statement_id  = "AllowAPIGatewayInvoke"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.backend.function_name
+  principal     = "apigateway.amazonaws.com"
+  source_arn    = "${aws_apigatewayv2_api.backend.execution_arn}/*/*"
+}

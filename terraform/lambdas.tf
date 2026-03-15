@@ -211,11 +211,6 @@ resource "aws_lambda_function" "backend" {
   tags = local.common_tags
 }
 
-resource "aws_lambda_function_url" "backend" {
-  function_name      = aws_lambda_function.backend.function_name
-  authorization_type = "NONE"
-}
-
 # Telegram Webhook Lambda (Node.js 20, ARM64)
 resource "aws_lambda_function" "telegram" {
   function_name = "dale-telegram-${var.stage}"
@@ -231,7 +226,7 @@ resource "aws_lambda_function" "telegram" {
 
   environment {
     variables = {
-      MESHQL_URL = aws_lambda_function_url.backend.function_url
+      MESHQL_URL = aws_apigatewayv2_api.backend.api_endpoint
     }
   }
 
@@ -262,7 +257,7 @@ resource "aws_lambda_function" "stripe" {
 
   environment {
     variables = {
-      MESHQL_URL = aws_lambda_function_url.backend.function_url
+      MESHQL_URL = aws_apigatewayv2_api.backend.api_endpoint
     }
   }
 

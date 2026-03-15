@@ -13,8 +13,8 @@ output "api_custom_domain" {
 }
 
 output "meshql_url" {
-  description = "Backend Lambda Function URL (meshql)"
-  value       = aws_lambda_function_url.backend.function_url
+  description = "Backend API Gateway endpoint (meshql)"
+  value       = aws_apigatewayv2_api.backend.api_endpoint
 }
 
 output "telegram_webhook_url" {
