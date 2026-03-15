@@ -318,7 +318,7 @@ resource "aws_lambda_function" "admin" {
   runtime       = "nodejs20.x"
   architectures = ["arm64"]
   memory_size   = 256
-  timeout       = 15
+  timeout       = 30
 
   filename         = "${path.module}/../dist/admin/admin.zip"
   source_code_hash = filebase64sha256("${path.module}/../dist/admin/admin.zip")

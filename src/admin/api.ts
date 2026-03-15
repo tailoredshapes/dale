@@ -96,19 +96,27 @@ export async function handler(
     if (!cognitoSub) {
       return json({ statusCode: 401, body: JSON.stringify({ error: 'Unauthorized' }) });
     }
-    const onboardResult = await handleOnboard(cognitoSub, event.body ?? '', {
-      generateSecret: () => randomBytes(32).toString('hex'),
-      setWebhook,
-      registerPayPalWebhook,
-      telegramWebhookUrl: config.telegramWebhookUrl,
-      stripeWebhookUrl: config.stripeWebhookUrl,
-      paypalWebhookUrl: config.paypalWebhookUrl,
-      paypalBaseUrl: config.paypalBaseUrl,
-    });
+    let onboardResult;
+    try {
+      onboardResult = await handleOnboard(cognitoSub, event.body ?? '', {
+        generateSecret: () => randomBytes(32).toString('hex'),
+        setWebhook,
+        registerPayPalWebhook,
+        telegramWebhookUrl: config.telegramWebhookUrl,
+        stripeWebhookUrl: config.stripeWebhookUrl,
+        paypalWebhookUrl: config.paypalWebhookUrl,
+        paypalBaseUrl: config.paypalBaseUrl,
+      });
+    } catch (err: any) {
+      console.error('Onboard failed:', err);
+      return json({ statusCode: 500, body: JSON.stringify({ error: 'Onboard failed', detail: err.message }) });
+    }
     // Register sub→tenantId so JWT-authed requests resolve the tenant
     if (onboardResult.statusCode === 201) {
-      const body = JSON.parse(onboardResult.body);
-      if (body.tenantId) registerTenantForSub(cognitoSub, body.tenantId);
+      try {
+        const body = JSON.parse(onboardResult.body);
+        if (body.tenantId) registerTenantForSub(cognitoSub, body.tenantId);
+      } catch { /* ignore parse errors for non-JSON responses */ }
     }
     return json(onboardResult);
   }
